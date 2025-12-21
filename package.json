@@ -6,8 +6,28 @@
   "main": "src/index.js",
   "scripts": {
     "dev": "npx serve examples",
-    "test": "node --test src/*.test.js"
+    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
+    "test:watch": "NODE_OPTIONS='--experimental-vm-modules' jest --watch",
+    "test:coverage": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
+    "res:build": "rescript",
+    "res:watch": "rescript build -w",
+    "res:clean": "rescript clean"
   },
-  "keywords": ["wireframe", "ascii", "dsl", "html", "prototype"],
-  "license": "MIT"
+  "keywords": [
+    "wireframe",
+    "ascii",
+    "dsl",
+    "html",
+    "prototype"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "@rescript/core": "^1.0.0",
+    "ohm-js": "^17.3.0",
+    "rescript": "^11.0.0"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "jest": "^30.2.0"
+  }
 }

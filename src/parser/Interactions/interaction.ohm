@@ -1,0 +1,112 @@
+/**
+ * Wyreframe Interaction DSL Grammar
+ *
+ * This grammar defines the syntax for the interaction DSL which specifies
+ * element behaviors, properties, and scene transitions in a YAML-like format.
+ *
+ * Example Usage:
+ * @scene: login
+ * #email:
+ *   placeholder: "Enter your email"
+ *   variant: "primary"
+ *   @submit -> validate(email, password) then goto(home, fade)
+ *
+ * [ Login ]:
+ *   variant: "primary"
+ *   @click -> goto(home, slide-left)
+ */
+
+InteractionDSL {
+  // Top-level document structure
+  Document = SceneBlock+
+
+  // Scene block: scene directive followed by interactions
+  SceneBlock = sceneDirective Interaction*
+
+  // Scene directive: @scene: identifier
+  sceneDirective = "@scene:" space* identifier newline+
+
+  // Interaction: selector followed by optional properties and actions
+  Interaction = selector newline Properties? Actions?
+
+  // Selector types: input (#id), button ([text]), link ("text")
+  selector = inputSelector | buttonSelector | linkSelector
+
+  inputSelector = "#" identifier ":"
+  buttonSelector = "[" text "]" ":"
+  linkSelector = "\"" text "\"" ":"
+
+  // Properties: one or more property definitions
+  Properties = Property+
+
+  // Property: indented key: value pair
+  Property = indent key ":" space* value newline
+
+  // Actions: one or more action definitions
+  Actions = Action+
+
+  // Action: indented @event -> actionExpr
+  Action = indent "@" event space* "->" space* actionExpr newline
+
+  // Action expressions
+  actionExpr = gotoAction
+             | backAction
+             | forwardAction
+             | validateAction
+             | callAction
+
+  // Goto action: goto(scene_id, transition_type?)
+  gotoAction = "goto" space* "(" space* identifier (space* "," space* transition)? space* ")"
+
+  // Back navigation
+  backAction = "back" space* "(" space* ")"
+
+  // Forward navigation
+  forwardAction = "forward" space* "(" space* ")"
+
+  // Validate action: validate(field1, field2, ...)
+  validateAction = "validate" space* "(" space* fieldList space* ")"
+
+  // Call custom function: functionName(arg1, arg2, ...)
+  callAction = identifier space* "(" space* argList? space* ")"
+
+  // Transition type (e.g., "fade", "slide-left")
+  transition = identifier ("-" identifier)*
+
+  // Field list: comma-separated identifiers
+  fieldList = identifier (space* "," space* identifier)*
+
+  // Argument list: comma-separated values
+  argList = value (space* "," space* value)*
+
+  // Property key (identifier)
+  key = identifier
+
+  // Value types: string, boolean, number, or identifier
+  value = string | boolean | number | identifier
+
+  // String literal: "text"
+  string = "\"" (~"\"" any)* "\""
+
+  // Boolean literal
+  boolean = "true" | "false"
+
+  // Number literal (integer or float)
+  number = digit+ ("." digit+)?
+
+  // Identifier: letters, digits, hyphens, underscores
+  identifier = letter (letter | digit | "-" | "_")*
+
+  // Text for selectors: any character except ] or "
+  text = (~"]" ~"\"" any)+
+
+  // Event types
+  event = "click" | "change" | "submit" | "focus" | "blur" | "input"
+
+  // Indentation: two spaces or tab
+  indent = "  " | "\t"
+
+  // Whitespace
+  space = " "
+  newline = "\n" | "\r\n"
+}

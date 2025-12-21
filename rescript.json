@@ -1,0 +1,29 @@
+{
+  "name": "wyreframe-parser",
+  "version": "0.1.0",
+  "sources": [
+    {
+      "dir": "src/parser",
+      "subdirs": true
+    }
+  ],
+  "package-specs": {
+    "module": "esmodule",
+    "in-source": true
+  },
+  "suffix": ".mjs",
+  "bs-dependencies": [
+    "@rescript/core"
+  ],
+  "bs-dev-dependencies": [],
+  "gentypeconfig": {
+    "language": "typescript",
+    "module": "esmodule",
+    "shims": {}
+  },
+  "warnings": {
+    "error": "+101+5+104"
+  },
+  "ppx-flags": [],
+  "bsc-flags": ["-open RescriptCore"]
+}
