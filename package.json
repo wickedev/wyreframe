@@ -1,0 +1,13 @@
+{
+  "name": "wyreframe",
+  "version": "0.1.0",
+  "description": "ASCII wireframe + interaction DSL to HTML converter with scene transitions",
+  "type": "module",
+  "main": "src/index.js",
+  "scripts": {
+    "dev": "npx serve examples",
+    "test": "node --test src/*.test.js"
+  },
+  "keywords": ["wireframe", "ascii", "dsl", "html", "prototype"],
+  "license": "MIT"
+}
