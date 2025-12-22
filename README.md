@@ -3,7 +3,10 @@
 > A library that converts ASCII wireframes into working HTML/UI
 
 [![npm version](https://img.shields.io/npm/v/wyreframe.svg)](https://www.npmjs.com/package/wyreframe)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
+[![npm downloads](https://img.shields.io/npm/dm/wyreframe.svg)](https://www.npmjs.com/package/wyreframe)
+[![License: GPL-3.0](https://img.shields.io/badge/License-GPL--3.0-blue.svg)](https://www.gnu.org/licenses/gpl-3.0)
+[![ReScript](https://img.shields.io/badge/ReScript-12-e6484f.svg)](https://rescript-lang.org/)
+[![Node.js](https://img.shields.io/badge/Node.js-20+-green.svg)](https://nodejs.org/)
 
 ```
 +---------------------------+
