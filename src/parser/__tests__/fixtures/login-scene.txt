@@ -1,0 +1,17 @@
+@scene: login
+@title: Login Page
+
++--Login------------------+
+|                         |
+|     Welcome Back!       |
+|                         |
+|  Email:                 |
+|  #email                 |
+|                         |
+|  Password:              |
+|  #password              |
+|                         |
+|     [ Sign In ]         |
+|                         |
+|  "Forgot Password?"     |
++-------------------------+

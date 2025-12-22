@@ -1,0 +1,9 @@
++--Alignment--------------+
+|                         |
+|  Left Aligned           |
+|                         |
+|      Center Aligned     |
+|                         |
+|      Right Aligned      |
+|                         |
++-------------------------+

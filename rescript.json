@@ -3,10 +3,12 @@
   "version": "0.1.0",
   "sources": [
     {
-      "dir": "src/parser",
-      "subdirs": true
+      "dir": "src",
+      "subdirs": true,
+      "generators": []
     }
   ],
+  "ignored-dirs": ["__tests__"],
   "package-specs": {
     "module": "esmodule",
     "in-source": true
@@ -15,7 +17,6 @@
   "bs-dependencies": [
     "@rescript/core"
   ],
-  "bs-dev-dependencies": [],
   "gentypeconfig": {
     "language": "typescript",
     "module": "esmodule",

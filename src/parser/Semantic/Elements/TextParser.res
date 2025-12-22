@@ -33,7 +33,7 @@ let make = (): ElementParser.elementParser => {
         Types.Text({
           content: content,
           emphasis: false,
-          position: position,
+          position: Types.Position.make(position.row, position.col),
           align: Types.Left,
         }),
       )

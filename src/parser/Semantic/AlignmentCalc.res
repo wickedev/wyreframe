@@ -1,5 +1,8 @@
 // AlignmentCalc.res
 // Alignment calculation module for determining element positioning within boxes
+// Task 28: Implement AlignmentCalc Module
+
+open Types
 
 /**
  * Calculates the horizontal alignment of an element based on its position
@@ -22,7 +25,7 @@
 let calculate = (
   content: string,
   position: Position.t,
-  boxBounds: Types.bounds,
+  boxBounds: Bounds.t,
 ): Types.alignment => {
   // Trim content to get actual content length
   let trimmed = content->String.trim
@@ -92,7 +95,7 @@ type alignmentStrategy =
 let calculateWithStrategy = (
   content: string,
   position: Position.t,
-  boxBounds: Types.bounds,
+  boxBounds: Bounds.t,
   strategy: alignmentStrategy,
 ): Types.alignment => {
   switch strategy {

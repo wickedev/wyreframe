@@ -1,4 +1,6 @@
 // LinkParser.res
+
+open Types
 // Parser for link syntax: "Link Text" (quoted text)
 //
 // Recognizes quoted text patterns and generates Link elements.
@@ -90,16 +92,16 @@ let canParse = (content: string): bool => {
 let parse = (
   content: string,
   position: Position.t,
-  _bounds: Types.bounds,
+  _bounds: Bounds.t,
 ): ElementParser.parseResult<Types.element> => {
-  switch linkPattern->Js.Re.exec_(content) {
+  switch linkPattern->RegExp.exec(content) {
   | Some(result) => {
-      let captures = result->Js.Re.captures
+      // RegExp.Result.matches slices off the full match, so matches[0] is the first captured group
+      let matches = result->RegExp.Result.matches
 
-      switch captures->Array.get(1) {
-      | Some(capture) => {
-          // Extract the text content from the capture
-          let linkText = capture->Js.Nullable.toOption->Option.getOr("")
+      switch matches[0] {
+      | Some(linkText) => {
+          // linkText is already a string, no need for Nullable conversion
 
           // Check for empty text
           if linkText->String.trim === "" {
@@ -118,8 +120,9 @@ let parse = (
               Types.Link({
                 id: linkId,
                 text: unescapedText,
-                position: position,
+                position: Types.Position.make(position.row, position.col),
                 align: Left,
+                actions: [],
               }),
             )
           }

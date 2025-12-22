@@ -48,7 +48,7 @@ let make = (): ElementParser.elementParser => {
             Types.Checkbox({
               checked: true,
               label: label,
-              position: position,
+              position: Types.Position.make(position.row, position.col),
             })
           )
         }
@@ -71,7 +71,7 @@ let make = (): ElementParser.elementParser => {
                 Types.Checkbox({
                   checked: false,
                   label: label,
-                  position: position,
+                  position: Types.Position.make(position.row, position.col),
                 })
               )
             }

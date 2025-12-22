@@ -10,6 +10,7 @@ lib/
 .bsb.lock
 *.bs.js
 *.mjs
+*.gen.tsx
 
 # Test
 coverage/
@@ -60,6 +61,5 @@ docs/working/
 !.claude/commands/
 !.claude/skills/
 
-# Wyreframe Generated Files
-poc/
-examples/
+# TypeScript build output
+dist/

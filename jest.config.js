@@ -3,11 +3,18 @@ export default {
   testEnvironment: 'node',
 
   // Test file patterns
+  // ReScript compiles .res files to .mjs, so we test the compiled output
   testMatch: [
     '**/__tests__/**/*.test.mjs',
     '**/__tests__/**/*.test.js',
     '**/*.test.mjs',
     '**/*.test.js'
+  ],
+
+  // Ignore ReScript source files in test discovery (test the compiled .mjs instead)
+  testPathIgnorePatterns: [
+    '/node_modules/',
+    '\\.res$'
   ],
 
   // Module file extensions

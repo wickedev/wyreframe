@@ -12,7 +12,7 @@ type template = {
 }
 
 // Helper function to format position as "row X, column Y" (1-indexed for user display)
-let formatPosition = (pos: position): string => {
+let formatPosition = (pos: Types.Position.t): string => {
   `row ${Int.toString(pos.row + 1)}, column ${Int.toString(pos.col + 1)}`
 }
 
@@ -57,17 +57,17 @@ Make both borders the same width. Adjust the ${topWidth > bottomWidth ? "bottom"
 • Example: "+----+" is 6 characters wide (including corners)`,
     }
 
-  | MisalignedPipe({position, expected, actual}) => {
+  | MisalignedPipe({position, expectedCol, actualCol}) => {
       title: "❌ Vertical border misaligned",
       message: `The '|' character at ${formatPosition(position)} is not aligned with the box edge:
-• Expected column: ${Int.toString(expected + 1)}
-• Actual column: ${Int.toString(actual + 1)}
-• Off by: ${Int.toString(Js.Math.abs_int(expected - actual))} ${Js.Math.abs_int(expected - actual) === 1 ? "space" : "spaces"}
+• Expected column: ${Int.toString(expectedCol + 1)}
+• Actual column: ${Int.toString(actualCol + 1)}
+• Off by: ${Int.toString(Js.Math.abs_int(expectedCol - actualCol))} ${Js.Math.abs_int(expectedCol - actualCol) === 1 ? "space" : "spaces"}
 
 Vertical borders must be perfectly aligned to form valid box sides.`,
       solution: `💡 Solution:
-Move the '|' character to column ${Int.toString(expected + 1)}:
-• ${expected > actual ? "Add" : "Remove"} ${Int.toString(Js.Math.abs_int(expected - actual))} space${Js.Math.abs_int(expected - actual) === 1 ? "" : "s"} ${expected > actual ? "before" : "after"} the '|' character
+Move the '|' character to column ${Int.toString(expectedCol + 1)}:
+• ${expectedCol > actualCol ? "Add" : "Remove"} ${Int.toString(Js.Math.abs_int(expectedCol - actualCol))} space${Js.Math.abs_int(expectedCol - actualCol) === 1 ? "" : "s"} ${expectedCol > actualCol ? "before" : "after"} the '|' character
 • Use a monospace font editor to ensure proper alignment
 • Check that all '|' characters in this box are in the same column`,
     }
@@ -197,6 +197,30 @@ Consider simplifying the structure:
 
 This is a warning - parsing will continue.`,
     }
+
+  | InvalidInput({message}) => {
+      title: "❌ Invalid input",
+      message: `${message}
+
+The input could not be processed due to formatting or content issues.`,
+      solution: `💡 Solution:
+Check your input format:
+• Ensure the wireframe text is properly formatted
+• Use ASCII characters for box drawing
+• Check for encoding issues if pasting from external sources`,
+    }
+
+  | InvalidStartPosition(position) => {
+      title: "❌ Invalid starting position",
+      message: `Position ${formatPosition(position)} is not a valid corner for box tracing.
+
+Box tracing must start from a '+' character that forms a valid corner.`,
+      solution: `💡 Solution:
+Ensure the starting position:
+• Contains a '+' character
+• Is part of a complete box structure
+• Has valid border characters adjacent to it`,
+    }
   }
 }
 
@@ -214,6 +238,51 @@ ${template.solution}`
 // Format error message from ParseError type
 let formatError = (error: t): string => {
   format(error.code)
+}
+
+// Format complete error message from ParseError with code snippet context
+// This is the main formatting function for Task 38
+// Includes: title, message, code snippet (if available), and solution
+let formatWithContext = (error: t): string => {
+  let template = getTemplate(error.code)
+
+  // Build the formatted message parts
+  let parts = []
+
+  // 1. Title
+  parts->Js.Array2.push(template.title)->ignore
+  parts->Js.Array2.push("")->ignore
+
+  // 2. Message
+  parts->Js.Array2.push(template.message)->ignore
+  parts->Js.Array2.push("")->ignore
+
+  // 3. Code Snippet (if context is available)
+  switch error.context {
+  | Some(ctx) => {
+      let snippet = ErrorContext.getSnippet(ctx)
+      parts->Js.Array2.push("📍 Location:")->ignore
+      parts->Js.Array2.push("")->ignore
+      parts->Js.Array2.push(snippet)->ignore
+      parts->Js.Array2.push("")->ignore
+    }
+  | None => ()
+  }
+
+  // 4. Solution
+  parts->Js.Array2.push(template.solution)->ignore
+
+  // Join all parts with newlines
+  parts->Js.Array2.joinWith("\n")
+}
+
+// Format complete error message from ParseError type
+// Uses formatWithContext if context is available, otherwise uses simple format
+let formatComplete = (error: t): string => {
+  switch error.context {
+  | Some(_) => formatWithContext(error)
+  | None => formatError(error)
+  }
 }
 
 // Get just the title from an error code

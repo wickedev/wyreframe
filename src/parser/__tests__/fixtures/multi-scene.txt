@@ -1,0 +1,25 @@
+@scene: home
+@title: Home
+
++--Home-------------------+
+|                         |
+|     Welcome!            |
+|                         |
+|  [ Get Started ]        |
+|                         |
++-------------------------+
+
+---
+
+@scene: profile
+@title: Profile
+
++--Profile----------------+
+|                         |
+|  User Profile           |
+|                         |
+|  #username              |
+|                         |
+|  [ Save ]               |
+|                         |
++-------------------------+

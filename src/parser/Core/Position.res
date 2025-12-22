@@ -1,43 +1,46 @@
 // Position.res
-// Core position type for 2D grid navigation with row/col coordinates
+// Represents a position in the 2D grid with row and column coordinates
 
 type t = {
   row: int,
   col: int,
 }
 
-// Create a new position with row and column coordinates
+// Create a position
 let make = (row: int, col: int): t => {
-  row: row,
-  col: col,
+  {row, col}
 }
 
-// Move right by n columns (default: 1)
+// Navigation functions
 let right = (pos: t, ~n: int=1): t => {
   {row: pos.row, col: pos.col + n}
 }
 
-// Move down by n rows (default: 1)
 let down = (pos: t, ~n: int=1): t => {
   {row: pos.row + n, col: pos.col}
 }
 
-// Move left by n columns (default: 1)
 let left = (pos: t, ~n: int=1): t => {
   {row: pos.row, col: pos.col - n}
 }
 
-// Move up by n rows (default: 1)
 let up = (pos: t, ~n: int=1): t => {
   {row: pos.row - n, col: pos.col}
 }
 
-// Check if two positions are equal
-let equals = (pos1: t, pos2: t): bool => {
-  pos1.row === pos2.row && pos1.col === pos2.col
+// Equality
+let equals = (a: t, b: t): bool => {
+  a.row == b.row && a.col == b.col
 }
 
-// Convert position to string format "(row, col)"
+// String representation (1-indexed for user display)  
 let toString = (pos: t): string => {
-  "(" ++ Int.toString(pos.row) ++ ", " ++ Int.toString(pos.col) ++ ")"
+  let rowStr = Int.toString(pos.row + 1)
+  let colStr = Int.toString(pos.col + 1)
+  "(" ++ rowStr ++ ", " ++ colStr ++ ")"
+}
+
+// Create from user-friendly 1-indexed coordinates
+let fromUserCoords = (row: int, col: int): t => {
+  {row: row - 1, col: col - 1}
 }

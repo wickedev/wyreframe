@@ -3,15 +3,36 @@
   "version": "0.1.0",
   "description": "ASCII wireframe + interaction DSL to HTML converter with scene transitions",
   "type": "module",
-  "main": "src/index.js",
+  "main": "dist/index.js",
+  "module": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./parser": {
+      "import": "./src/parser/Parser.mjs"
+    },
+    "./renderer": {
+      "import": "./src/renderer/Renderer.mjs"
+    }
+  },
   "scripts": {
-    "dev": "npx serve examples",
+    "dev": "npx serve .",
+    "build": "npm run res:build && npm run ts:build",
+    "ts:build": "tsc",
+    "ts:watch": "tsc --watch",
     "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
     "test:watch": "NODE_OPTIONS='--experimental-vm-modules' jest --watch",
     "test:coverage": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
+    "test:validation": "NODE_OPTIONS='--experimental-vm-modules' jest ParallelValidation",
+    "validate:parser": "npm run res:build && npm run test:validation",
     "res:build": "rescript",
     "res:watch": "rescript build -w",
-    "res:clean": "rescript clean"
+    "res:clean": "rescript clean",
+    "prepublishOnly": "npm run build"
   },
   "keywords": [
     "wireframe",
@@ -23,11 +44,12 @@
   "license": "MIT",
   "dependencies": {
     "@rescript/core": "^1.0.0",
-    "ohm-js": "^17.3.0",
     "rescript": "^11.0.0"
   },
   "devDependencies": {
+    "@glennsl/rescript-jest": "^0.13.1",
     "@types/jest": "^30.0.0",
-    "jest": "^30.2.0"
+    "jest": "^30.2.0",
+    "typescript": "^5.9.3"
   }
 }

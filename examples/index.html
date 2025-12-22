@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Wyreframe Demo - Login Flow</title>
+  <script type="importmap">
+    {
+      "imports": {
+        "wyreframe": "../dist/index.js",
+        "@rescript/core/": "../node_modules/@rescript/core/",
+        "rescript/": "../node_modules/rescript/"
+      }
+    }
+  </script>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0f172a; display: flex; justify-content: center; align-items: flex-start; min-height: 100vh; padding: 20px; }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+
+  <script type="module">
+    import { createUI } from 'wyreframe';
+
+    const ui = `
+# Wyreframe Login Flow Demo
+
+이 문서는 로그인 플로우의 와이어프레임과 인터랙션을 정의합니다.
+마크다운 텍스트는 자동으로 무시되고, 와이어프레임과 인터랙션만 파싱됩니다.
+
+## 1. 로그인 화면
+
+사용자가 처음 보게 되는 화면입니다.
+
+@scene: login
+@title: 로그인
+@device: mobile
+
++---------------------------+
+|                           |
+|        'WYREFRAME'        |
+|                           |
+|  +---------------------+  |
+|  | #email              |  |
+|  +---------------------+  |
+|                           |
+|  +---------------------+  |
+|  | #password           |  |
+|  +---------------------+  |
+|                           |
+|     [ Login ]             |
+|                           |
+|  "Forgot password?"       |
+|                           |
+|  "Create account"         |
++---------------------------+
+
+### 로그인 화면 인터랙션
+
+#email:
+  type: input
+  placeholder: "이메일을 입력하세요"
+
+#password:
+  type: input
+  placeholder: "비밀번호"
+
+[Login]:
+  variant: primary
+  @click -> goto(dashboard, slide-left)
+
+"Forgot password?":
+  @click -> goto(forgot, slide-left)
+
+"Create account":
+  @click -> goto(signup, slide-left)
+
+---
+
+## 2. 회원가입 화면
+
+새로운 사용자를 위한 가입 폼입니다.
+
+@scene: signup
+@title: 회원가입
+@device: mobile
+
++---------------------------+
+|     [ Back ]              |
+|                           |
+|     Create Account        |
+|                           |
+|  +---------------------+  |
+|  | #name               |  |
+|  +---------------------+  |
+|                           |
+|  +---------------------+  |
+|  | #email2             |  |
+|  +---------------------+  |
+|                           |
+|  +---------------------+  |
+|  | #password2          |  |
+|  +---------------------+  |
+|                           |
+|  +---------------------+  |
+|  | #confirmPassword    |  |
+|  +---------------------+  |
+|                           |
+|     [ Sign Up ]           |
++---------------------------+
+
+### 회원가입 인터랙션
+
+#name:
+  type: input
+  placeholder: "이름"
+
+#email2:
+  type: input
+  placeholder: "이메일"
+
+#password2:
+  type: input
+  placeholder: "비밀번호"
+
+#confirmPassword:
+  type: input
+  placeholder: "비밀번호 확인"
+
+[Back]:
+  variant: ghost
+  @click -> goto(login, slide-right)
+
+[Sign Up]:
+  @click -> goto(dashboard, zoom)
+
+---
+
+## 3. 비밀번호 찾기
+
+비밀번호를 잊어버린 사용자를 위한 복구 화면입니다.
+
+@scene: forgot
+@title: 비밀번호 찾기
+@device: mobile
+
++---------------------------+
+|     [ Back ]              |
+|                           |
+|   Reset Password          |
+|                           |
+|   Enter your email to     |
+|   receive reset link      |
+|                           |
+|  +---------------------+  |
+|  | #resetEmail         |  |
+|  +---------------------+  |
+|                           |
+|     [ Send Link ]         |
++---------------------------+
+
+### 비밀번호 찾기 인터랙션
+
+#resetEmail:
+  type: input
+  placeholder: "이메일"
+
+[Back]:
+  variant: ghost
+  @click -> goto(login, slide-right)
+
+[Send Link]:
+  @click -> goto(login, slide-right)
+
+---
+
+## 4. 대시보드
+
+로그인 후 사용자가 보게 되는 메인 화면입니다.
+
+@scene: dashboard
+@title: 대시보드
+@device: mobile
+
++---------------------------+
+|  Dashboard      [ Logout ]|
++===========================+
+|                           |
+|  Welcome back!            |
+|                           |
++--Stats------------------+ |
+|                           |
+|   Users: 1,234            |
+|   Active: 567             |
+|   Revenue: $12,345        |
+|                           |
++-------------------------+ |
+|                           |
++--Quick Actions----------+ |
+|                           |
+|  [ New Post ]             |
+|  [ Settings ]             |
+|  [ Analytics ]            |
+|                           |
++-------------------------+ |
++---------------------------+
+
+### 대시보드 인터랙션
+
+[Logout]:
+  variant: ghost
+  @click -> goto(login, fade)
+
+[New Post]:
+  variant: secondary
+
+[Settings]:
+  variant: secondary
+
+[Analytics]:
+  variant: secondary
+
+---
+
+이상으로 로그인 플로우 와이어프레임 정의를 마칩니다.
+콘솔에서 sceneManager.goto("dashboard") 등을 실행하여 씬을 전환해보세요.
+`;
+
+    const result = createUI(ui);
+
+    if (!result.success) {
+      const errorMsg = document.createElement('p');
+      errorMsg.style.color = 'red';
+      errorMsg.textContent = 'Parse Error: ' + JSON.stringify(result.errors);
+      document.getElementById('app').appendChild(errorMsg);
+    } else {
+      document.getElementById('app').appendChild(result.root);
+      window.sceneManager = result.sceneManager;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
++--Elements---------------+
+|                         |
+|  * Emphasis Text        |
+|                         |
+|  [ Button ]             |
+|                         |
+|  #input-field           |
+|                         |
+|  "Link Text"            |
+|                         |
+|  [x] Checked Item       |
+|  [ ] Unchecked Item     |
+|                         |
+|  Regular text           |
+|                         |
++-------------------------+
