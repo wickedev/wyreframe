@@ -858,7 +858,7 @@ describe("ErrorMessages", () => {
 
       let template = ErrorMessages.getTemplate(code)
 
-      expect(Js.String2.includes(template.title, "닫히지"))->toBe(true)
+      expect(Js.String2.includes(template.title, "Unclosed"))->toBe(true)
       expect(Js.String2.includes(template.solution, "💡"))->toBe(true)
     })
 

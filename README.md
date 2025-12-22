@@ -1,27 +1,27 @@
 # Wyreframe
 
-> ASCII 와이어프레임을 실제 동작하는 HTML/UI로 변환하는 라이브러리
+> A library that converts ASCII wireframes into working HTML/UI
 
 [![npm version](https://img.shields.io/npm/v/wyreframe.svg)](https://www.npmjs.com/package/wyreframe)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 
 ```
 +---------------------------+
-|      'WYREFRAME'          |     ASCII로 그리면
+|      'WYREFRAME'          |     Draw in ASCII
 |  +---------------------+  |         ↓
-|  | #email              |  |     HTML로 변환!
+|  | #email              |  |     Convert to HTML!
 |  +---------------------+  |
 |       [ Login ]           |
 +---------------------------+
 ```
 
-## 설치
+## Installation
 
 ```bash
 npm install wyreframe
 ```
 
-## 빠른 시작
+## Quick Start
 
 ```javascript
 import { createUI } from 'wyreframe';
@@ -38,7 +38,7 @@ const ui = `
 +---------------------------+
 
 #email:
-  placeholder: "이메일을 입력하세요"
+  placeholder: "Enter your email"
 
 [Login]:
   @click -> goto(dashboard, slide-left)
@@ -52,72 +52,72 @@ if (result.success) {
 }
 ```
 
-## 문법 요약
+## Syntax Summary
 
-| 문법 | 설명 | 예시 |
+| Syntax | Description | Example |
 |------|------|------|
-| `+---+` | 박스/컨테이너 | `<div>` |
-| `[ Text ]` | 버튼 | `<button>` |
-| `#id` | 입력 필드 | `<input>` |
-| `"text"` | 링크 | `<a>` |
-| `'text'` | 강조 텍스트 | 타이틀, 헤딩 |
-| `[x]` / `[ ]` | 체크박스 | `<input type="checkbox">` |
-| `---` | 씬 구분자 | 멀티 씬 |
+| `+---+` | Box/Container | `<div>` |
+| `[ Text ]` | Button | `<button>` |
+| `#id` | Input field | `<input>` |
+| `"text"` | Link | `<a>` |
+| `'text'` | Emphasis text | Title, Heading |
+| `[x]` / `[ ]` | Checkbox | `<input type="checkbox">` |
+| `---` | Scene separator | Multi-scene |
 
 ## API
 
 ```javascript
 import { parse, render, createUI, createUIOrThrow } from 'wyreframe';
 
-// 파싱만
+// Parse only
 const result = parse(text);
 
-// 렌더링만
+// Render only
 const { root, sceneManager } = render(ast);
 
-// 파싱 + 렌더링 (권장)
+// Parse + Render (recommended)
 const result = createUI(text);
 
-// 에러 시 throw
+// Throw on error
 const { root, sceneManager } = createUIOrThrow(text);
 ```
 
 ### SceneManager
 
 ```javascript
-sceneManager.goto('dashboard');           // 씬 이동
-sceneManager.getCurrentScene();           // 현재 씬
-sceneManager.getSceneIds();               // 전체 씬 목록
+sceneManager.goto('dashboard');           // Navigate to scene
+sceneManager.getCurrentScene();           // Get current scene
+sceneManager.getSceneIds();               // Get all scene IDs
 ```
 
-## 인터랙션
+## Interactions
 
 ```yaml
 #email:
-  placeholder: "이메일"
+  placeholder: "Email"
 
 [Login]:
   variant: primary
   @click -> goto(dashboard, slide-left)
 ```
 
-**전환 효과:** `fade`, `slide-left`, `slide-right`, `zoom`
+**Transition effects:** `fade`, `slide-left`, `slide-right`, `zoom`
 
-## 문서
+## Documentation
 
-- [파서 아키텍처](docs/PARSER_ARCHITECTURE.md)
-- [테스트 가이드](docs/TESTING.md)
-- [예제](examples/index.html)
+- [Parser Architecture](docs/PARSER_ARCHITECTURE.md)
+- [Testing Guide](docs/TESTING.md)
+- [Examples](examples/index.html)
 
-## 개발
+## Development
 
 ```bash
 npm install
-npm run res:build    # ReScript 빌드
-npm run dev          # 개발 서버 (http://localhost:3000/examples)
-npm test             # 테스트
+npm run res:build    # ReScript build
+npm run dev          # Dev server (http://localhost:3000/examples)
+npm test             # Run tests
 ```
 
-## 라이선스
+## License
 
 MIT License

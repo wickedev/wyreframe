@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="ko">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -28,15 +28,15 @@
     const ui = `
 # Wyreframe Login Flow Demo
 
-이 문서는 로그인 플로우의 와이어프레임과 인터랙션을 정의합니다.
-마크다운 텍스트는 자동으로 무시되고, 와이어프레임과 인터랙션만 파싱됩니다.
+This document defines wireframes and interactions for a login flow.
+Markdown text is automatically ignored, and only wireframes and interactions are parsed.
 
-## 1. 로그인 화면
+## 1. Login Screen
 
-사용자가 처음 보게 되는 화면입니다.
+This is the first screen the user sees.
 
 @scene: login
-@title: 로그인
+@title: Login
 @device: mobile
 
 +---------------------------+
@@ -58,15 +58,15 @@
 |  "Create account"         |
 +---------------------------+
 
-### 로그인 화면 인터랙션
+### Login Screen Interactions
 
 #email:
   type: input
-  placeholder: "이메일을 입력하세요"
+  placeholder: "Enter your email"
 
 #password:
   type: input
-  placeholder: "비밀번호"
+  placeholder: "Password"
 
 [Login]:
   variant: primary
@@ -80,12 +80,12 @@
 
 ---
 
-## 2. 회원가입 화면
+## 2. Sign Up Screen
 
-새로운 사용자를 위한 가입 폼입니다.
+A registration form for new users.
 
 @scene: signup
-@title: 회원가입
+@title: Sign Up
 @device: mobile
 
 +---------------------------+
@@ -112,23 +112,23 @@
 |     [ Sign Up ]           |
 +---------------------------+
 
-### 회원가입 인터랙션
+### Sign Up Interactions
 
 #name:
   type: input
-  placeholder: "이름"
+  placeholder: "Name"
 
 #email2:
   type: input
-  placeholder: "이메일"
+  placeholder: "Email"
 
 #password2:
   type: input
-  placeholder: "비밀번호"
+  placeholder: "Password"
 
 #confirmPassword:
   type: input
-  placeholder: "비밀번호 확인"
+  placeholder: "Confirm password"
 
 [Back]:
   variant: ghost
@@ -139,12 +139,12 @@
 
 ---
 
-## 3. 비밀번호 찾기
+## 3. Forgot Password
 
-비밀번호를 잊어버린 사용자를 위한 복구 화면입니다.
+A recovery screen for users who forgot their password.
 
 @scene: forgot
-@title: 비밀번호 찾기
+@title: Forgot Password
 @device: mobile
 
 +---------------------------+
@@ -162,11 +162,11 @@
 |     [ Send Link ]         |
 +---------------------------+
 
-### 비밀번호 찾기 인터랙션
+### Forgot Password Interactions
 
 #resetEmail:
   type: input
-  placeholder: "이메일"
+  placeholder: "Email"
 
 [Back]:
   variant: ghost
@@ -177,12 +177,12 @@
 
 ---
 
-## 4. 대시보드
+## 4. Dashboard
 
-로그인 후 사용자가 보게 되는 메인 화면입니다.
+The main screen users see after logging in.
 
 @scene: dashboard
-@title: 대시보드
+@title: Dashboard
 @device: mobile
 
 +---------------------------+
@@ -208,7 +208,7 @@
 +-------------------------+ |
 +---------------------------+
 
-### 대시보드 인터랙션
+### Dashboard Interactions
 
 [Logout]:
   variant: ghost
@@ -225,8 +225,8 @@
 
 ---
 
-이상으로 로그인 플로우 와이어프레임 정의를 마칩니다.
-콘솔에서 sceneManager.goto("dashboard") 등을 실행하여 씬을 전환해보세요.
+This concludes the login flow wireframe definition.
+Try running sceneManager.goto("dashboard") in the console to switch scenes.
 `;
 
     const result = createUI(ui);

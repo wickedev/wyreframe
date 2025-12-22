@@ -366,7 +366,7 @@ let parseInternal = (wireframe: string, interactions: option<string>): parseResu
  * +---------------------------+
  *
  * #email:
- *   placeholder: "이메일을 입력하세요"
+ *   placeholder: "Enter your email"
  *
  * [Login]:
  *   @click -> goto(dashboard)

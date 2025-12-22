@@ -359,7 +359,7 @@ The existing regex-based parser exhibits the following issues:
 2. WHEN an UNCLOSED_BOX error occurs THEN the system SHALL include the opening position and suggest the correct closing syntax
 3. WHEN a MISMATCHED_WIDTH error occurs THEN the system SHALL report both the top width and bottom width with a suggestion to make them equal
 4. WHEN a MISALIGNED_PIPE error occurs THEN the system SHALL show the expected column position and suggest realigning the '|' character
-5. WHEN an error message is formatted THEN the system SHALL include a "💡 해결 방법" (Solution) section with actionable steps
+5. WHEN an error message is formatted THEN the system SHALL include a "💡 Solution" section with actionable steps
 6. WHEN error messages are displayed THEN the system SHALL use appropriate emoji indicators (❌ for errors, ⚠️ for warnings)
 
 **Traceability**: Maps to PARSER_ARCHITECTURE.md Section 5.3 (Error message templates)
