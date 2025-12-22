@@ -13,10 +13,7 @@
   "types": "dist/index.d.ts",
   "files": [
     "dist",
-    "src/parser/**/*.mjs",
-    "src/parser/**/*.gen.tsx",
-    "src/renderer/**/*.mjs",
-    "src/renderer/**/*.gen.tsx",
+    "src",
     "!src/**/__tests__",
     "README.md"
   ],
@@ -53,7 +50,7 @@
     "html",
     "prototype"
   ],
-  "license": "MIT",
+  "license": "GPL-3.0",
   "dependencies": {
     "@rescript/core": "^1.6.1",
     "rescript": "12"

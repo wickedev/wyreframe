@@ -159,9 +159,11 @@ sceneManager.getSceneIds()                // Get all scene IDs (array<string>)
 
 ## Documentation
 
-- [Parser Architecture](docs/PARSER_ARCHITECTURE.md)
-- [Testing Guide](docs/TESTING.md)
-- [Examples](examples/index.html)
+- [API Reference](docs/api.md)
+- [Developer Guide](docs/developer-guide.md)
+- [Examples](docs/examples.md)
+- [Testing Guide](docs/testing.md)
+- [Live Demo](examples/index.html)
 
 ## Development
 
@@ -174,4 +176,4 @@ npm test             # Run tests
 
 ## License
 
-MIT License
+GPL-3.0 License - see [LICENSE](LICENSE) for details.
