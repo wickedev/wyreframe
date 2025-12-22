@@ -9,29 +9,33 @@ open Types
 /**
  * Regular expression pattern for input field syntax.
  * Matches: # followed by one or more word characters (letters, digits, underscores)
+ * The field must be at the end of the string (with optional trailing whitespace).
+ * Can appear anywhere in the line, optionally preceded by a label.
  * Examples:
  * - "#email" ✓
  * - "#password123" ✓
  * - "#user_name" ✓
- * - "#first-name" ✗ (contains hyphen, not a word character)
+ * - "Email: #email" ✓ (with label prefix)
+ * - "Password: #password" ✓ (with label prefix)
+ * - "#first-name" ✗ (contains hyphen after word characters)
+ * - "#email.address" ✗ (dot not allowed)
+ * - "##email" ✗ (double hash not allowed)
  * - "# email" ✗ (space after #)
  */
-let inputPattern = %re("/^#(\w+)$/")
+// Pattern: (start or non-#) + # + word chars + optional trailing whitespace + end
+let inputPattern = %re("/(?:^|[^#])#(\w+)\s*$/")
 
 /**
  * Quick check if content matches input field pattern.
  *
  * @param content - Text content to check
- * @return true if content starts with # followed by word characters
+ * @return true if content contains # followed by word characters
  */
 let canParse = (content: string): bool => {
   let trimmed = content->String.trim
 
-  // Check if matches #\w+ pattern
-  switch inputPattern->RegExp.exec(trimmed) {
-  | Some(_) => true
-  | None => false
-  }
+  // Check if contains #\w+ pattern anywhere in the string
+  inputPattern->RegExp.test(trimmed)
 }
 
 /**

@@ -9,7 +9,6 @@
 //
 // Requirements:
 // - REQ-28: Reliability - Error Recovery (collect all errors)
-// - Task 18: Implement ShapeDetector Main Module
 
 open Types
 
@@ -89,7 +88,7 @@ let deduplicateBoxes = (boxes: array<BoxTracer.box>): array<BoxTracer.box> => {
 }
 
 // ============================================================================
-// Main Detection Function (Task 18)
+// Main Detection Function
 // ============================================================================
 
 /**
@@ -121,7 +120,7 @@ let detect = (grid: Grid.t): detectResult => {
   // Note: Most corners will NOT be valid top-left corners, which is expected.
   // Only corners that are actually top-left of a box will trace successfully.
   let boxes = []
-  let _traceFailures = [] // Keep track of failures for debugging only
+  let traceFailures = [] // Keep track of failures
 
   corners->Array.forEach(corner => {
     switch BoxTracer.traceBox(grid, corner) {
@@ -129,11 +128,10 @@ let detect = (grid: Grid.t): detectResult => {
         // Successfully traced a box - add to collection
         boxes->Array.push(box)
       }
-    | Error(_traceError) => {
-        // This corner is not a valid top-left of a box.
-        // This is NORMAL - most '+' characters are not top-left corners.
-        // Don't treat this as an error.
-        _traceFailures->Array.push(_traceError)
+    | Error(traceError) => {
+        // This corner failed to trace as a top-left corner.
+        // Could be a non-top-left corner (expected) or a malformed box (error).
+        traceFailures->Array.push(traceError)
       }
     }
   })
@@ -141,11 +139,17 @@ let detect = (grid: Grid.t): detectResult => {
   // Step 3: Check if we found any boxes
   if Array.length(boxes) === 0 {
     // No boxes traced successfully
-    // This could mean:
-    // 1. The wireframe has no boxes (valid but empty)
-    // 2. All box structures are malformed
-    // Return empty array (no boxes) - this is not necessarily an error
-    Ok([])
+    if Array.length(corners) === 0 {
+      // No corners at all - truly empty wireframe
+      Ok([])
+    } else if Array.length(traceFailures) > 0 {
+      // Had corners but all traces failed - this indicates malformed boxes
+      // Return all trace failures as errors
+      Error(traceFailures)
+    } else {
+      // No corners and no failures - empty result
+      Ok([])
+    }
   } else {
     // Step 4: Detect dividers for each successfully traced box
     // TODO: Implement when DividerDetector module is available

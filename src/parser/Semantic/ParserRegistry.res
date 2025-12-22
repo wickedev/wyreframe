@@ -1,6 +1,5 @@
 // ParserRegistry.res
 // Registry for element parsers with priority-based ordering
-// Task 27: Implement ParserRegistry
 
 open Types
 

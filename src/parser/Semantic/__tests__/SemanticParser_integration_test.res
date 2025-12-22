@@ -1,5 +1,5 @@
 // SemanticParser_integration_test.res
-// Integration tests for SemanticParser module (Task 34)
+// Integration tests for SemanticParser module
 //
 // Test Coverage:
 // - Login scene parsing
@@ -11,16 +11,43 @@
 //
 // Requirements: REQ-25 (Testability - Unit Test Coverage)
 
-open Jest
-open Expect
-open Types
+open Vitest
+
+// Helper for passing tests
+let pass = ()
+
+// =============================================================================
+// Recursive Element Search Helpers
+// =============================================================================
+
+/**
+ * Recursively collect all elements including those nested inside Box children.
+ * This is needed because named boxes contain their elements in Box.children,
+ * not directly in scene.elements.
+ */
+let rec collectAllElements = (elements: array<Types.element>): array<Types.element> => {
+  elements->Array.flatMap(el => {
+    switch el {
+    | Types.Box({children}) => Array.concat([el], collectAllElements(children))
+    | other => [other]
+    }
+  })
+}
+
+/**
+ * Check if any element matches a predicate, searching recursively.
+ */
+let hasElement = (elements: array<Types.element>, predicate: Types.element => bool): bool => {
+  let allElements = collectAllElements(elements)
+  allElements->Array.some(predicate)
+}
 
 // ============================================================================
 // TEST CASE SP-01: Simple Login Scene Parsing
 // ============================================================================
 
-describe("SemanticParser Integration - Login Scene", () => {
-  test("SP-01: parses complete login scene with all elements", () => {
+describe("SemanticParser Integration - Login Scene", t => {
+  test("SP-01: parses complete login scene with all elements", t => {
     let wireframe = `
 @scene: login
 @title: Login Page
@@ -38,93 +65,93 @@ describe("SemanticParser Integration - Login Scene", () => {
 +-----------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
         // Verify scene count
-        expect(Array.length(ast.scenes))->toBe(1)
+        t->expect(Array.length(ast.scenes))->Expect.toBe(1)
 
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
         // Verify scene metadata
-        expect(scene.id)->toBe("login")
-        expect(scene.title)->toBe("Login Page")
+        t->expect(scene.id)->Expect.toBe("login")
+        t->expect(scene.title)->Expect.toBe("Login Page")
 
-        // Verify emphasis text element exists
-        let hasEmphasis = scene.elements->Array.some(el =>
+        // Verify emphasis text element exists (search recursively inside boxes)
+        let emphasisFound = hasElement(scene.elements, el =>
           switch el {
-          | Text({emphasis: true, content}) => content->String.includes("Welcome")
+          | Types.Text({emphasis: true, content}) => content->String.includes("Welcome")
           | _ => false
           }
         )
-        expect(hasEmphasis)->toBe(true)
+        t->expect(emphasisFound)->Expect.toBe(true)
 
-        // Verify email input exists
-        let hasEmailInput = scene.elements->Array.some(el =>
+        // Verify email input exists (search recursively)
+        let emailInputFound = hasElement(scene.elements, el =>
           switch el {
-          | Input({id: "email"}) => true
+          | Types.Input({id: "email"}) => true
           | _ => false
           }
         )
-        expect(hasEmailInput)->toBe(true)
+        t->expect(emailInputFound)->Expect.toBe(true)
 
-        // Verify password input exists
-        let hasPasswordInput = scene.elements->Array.some(el =>
+        // Verify password input exists (search recursively)
+        let passwordInputFound = hasElement(scene.elements, el =>
           switch el {
-          | Input({id: "password"}) => true
+          | Types.Input({id: "password"}) => true
           | _ => false
           }
         )
-        expect(hasPasswordInput)->toBe(true)
+        t->expect(passwordInputFound)->Expect.toBe(true)
 
-        // Verify login button exists
-        let hasLoginButton = scene.elements->Array.some(el =>
+        // Verify login button exists (search recursively)
+        let loginButtonFound = hasElement(scene.elements, el =>
           switch el {
-          | Button({text: "Login"}) => true
+          | Types.Button({text: "Login"}) => true
           | _ => false
           }
         )
-        expect(hasLoginButton)->toBe(true)
+        t->expect(loginButtonFound)->Expect.toBe(true)
 
         // Verify total element count (box + content elements)
-        expect(Array.length(scene.elements))->toBeGreaterThan(0)
+        t->expect(Array.length(scene.elements))->Expect.Int.toBeGreaterThan(0)
       }
     | Error(errors) => {
         Console.error(errors)
-        fail("SP-01: Expected successful parse of login scene")
+        t->expect(true)->Expect.toBe(false) // fail: SP-01: Expected successful parse of login scene
       }
     }
   })
 
-  test("SP-01a: login scene elements have correct positions", () => {
+  test("SP-01a: login scene elements have correct positions", t => {
     let wireframe = `
 @scene: login
 
-+--Login--+
-|  #email |
-| [ OK ]  |
++--Login---+
+|  #email  |
+|  [ OK ]  |
 +----------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
         // Check that elements have position information
         scene.elements->Array.forEach(el => {
           switch el {
-          | Input({position}) => {
-              expect(position.row)->toBeGreaterThanOrEqual(0)
-              expect(position.col)->toBeGreaterThanOrEqual(0)
+          | Types.Input({position}) => {
+              t->expect(position.row)->Expect.Int.toBeGreaterThanOrEqual(0)
+              t->expect(position.col)->Expect.Int.toBeGreaterThanOrEqual(0)
             }
-          | Button({position}) => {
-              expect(position.row)->toBeGreaterThanOrEqual(0)
-              expect(position.col)->toBeGreaterThanOrEqual(0)
+          | Types.Button({position}) => {
+              t->expect(position.row)->Expect.Int.toBeGreaterThanOrEqual(0)
+              t->expect(position.col)->Expect.Int.toBeGreaterThanOrEqual(0)
             }
           | _ => ()
           }
         })
       }
-    | Error(_) => fail("Expected successful parse")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
     }
   })
 })
@@ -133,8 +160,8 @@ describe("SemanticParser Integration - Login Scene", () => {
 // TEST CASE SP-02: Multiple Scenes Parsing
 // ============================================================================
 
-describe("SemanticParser Integration - Multiple Scenes", () => {
-  test("SP-02: parses multiple scenes separated by dividers", () => {
+describe("SemanticParser Integration - Multiple Scenes", t => {
+  test("SP-02: parses multiple scenes separated by dividers", t => {
     let wireframe = `
 @scene: home
 @title: Home Screen
@@ -153,32 +180,32 @@ describe("SemanticParser Integration - Multiple Scenes", () => {
 +--------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
         // Verify scene count
-        expect(Array.length(ast.scenes))->toBe(2)
+        t->expect(Array.length(ast.scenes))->Expect.toBe(2)
 
         // Verify first scene
-        let homeScene = ast.scenes[0]
-        expect(homeScene.id)->toBe("home")
-        expect(homeScene.title)->toBe("Home Screen")
+        let homeScene = ast.scenes->Array.getUnsafe(0)
+        t->expect(homeScene.id)->Expect.toBe("home")
+        t->expect(homeScene.title)->Expect.toBe("Home Screen")
 
         // Verify second scene
-        let settingsScene = ast.scenes[1]
-        expect(settingsScene.id)->toBe("settings")
-        expect(settingsScene.title)->toBe("Settings Screen")
+        let settingsScene = ast.scenes->Array.getUnsafe(1)
+        t->expect(settingsScene.id)->Expect.toBe("settings")
+        t->expect(settingsScene.title)->Expect.toBe("Settings Screen")
 
         // Verify scenes are separate
-        expect(homeScene.id)->not->toBe(settingsScene.id)
+        t->expect(homeScene.id)->Expect.not->Expect.toBe(settingsScene.id)
       }
     | Error(errors) => {
         Console.error(errors)
-        fail("SP-02: Expected successful parse of multiple scenes")
+        t->expect(true)->Expect.toBe(false) // fail: SP-02: Expected successful parse of multiple scenes
       }
     }
   })
 
-  test("SP-02a: handles three or more scenes", () => {
+  test("SP-02a: handles three or more scenes", t => {
     let wireframe = `
 @scene: one
 +----+
@@ -200,14 +227,14 @@ describe("SemanticParser Integration - Multiple Scenes", () => {
 +----+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        expect(Array.length(ast.scenes))->toBe(3)
-        expect(ast.scenes[0].id)->toBe("one")
-        expect(ast.scenes[1].id)->toBe("two")
-        expect(ast.scenes[2].id)->toBe("three")
+        t->expect(Array.length(ast.scenes))->Expect.toBe(3)
+        t->expect((ast.scenes->Array.getUnsafe(0)).id)->Expect.toBe("one")
+        t->expect((ast.scenes->Array.getUnsafe(1)).id)->Expect.toBe("two")
+        t->expect((ast.scenes->Array.getUnsafe(2)).id)->Expect.toBe("three")
       }
-    | Error(_) => fail("Expected successful parse of three scenes")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse of three scenes
     }
   })
 })
@@ -216,89 +243,89 @@ describe("SemanticParser Integration - Multiple Scenes", () => {
 // TEST CASE SP-03: Nested Boxes Structure
 // ============================================================================
 
-describe("SemanticParser Integration - Nested Boxes", () => {
-  test("SP-03: parses nested box hierarchy correctly", () => {
+describe("SemanticParser Integration - Nested Boxes", t => {
+  test("SP-03: parses nested box hierarchy correctly", t => {
     let wireframe = `
 @scene: nested
 
-+--Outer--------------+
-|                     |
-|  +--Inner-------+  |
-|  |              |  |
-|  |  [ Button ]  |  |
-|  |              |  |
-|  +--------------+  |
-|                     |
-+---------------------+
++--Outer-------------+
+|                    |
+| +--Inner-------+   |
+| |              |   |
+| |  [ Button ]  |   |
+| |              |   |
+| +--------------+   |
+|                    |
++--------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
         // Find outer box
         let outerBox = scene.elements->Array.find(el =>
           switch el {
-          | Box({name: Some("Outer")}) => true
+          | Types.Box({name: Some("Outer")}) => true
           | _ => false
           }
         )
 
         switch outerBox {
-        | Some(Box({name, children})) => {
-            expect(name)->toBe(Some("Outer"))
-            expect(Array.length(children))->toBeGreaterThan(0)
+        | Some(Types.Box({name, children})) => {
+            t->expect(name)->Expect.toBe(Some("Outer"))
+            t->expect(Array.length(children))->Expect.Int.toBeGreaterThan(0)
 
             // Check for inner box in children
             let hasInnerBox = children->Array.some(child =>
               switch child {
-              | Box({name: Some("Inner")}) => true
+              | Types.Box({name: Some("Inner")}) => true
               | _ => false
               }
             )
-            expect(hasInnerBox)->toBe(true)
+            t->expect(hasInnerBox)->Expect.toBe(true)
           }
-        | _ => fail("Expected to find outer box")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find outer box
         }
       }
     | Error(errors) => {
         Console.error(errors)
-        fail("SP-03: Expected successful parse of nested boxes")
+        t->expect(true)->Expect.toBe(false) // fail: SP-03: Expected successful parse of nested boxes
       }
     }
   })
 
-  test("SP-03a: handles three-level nesting", () => {
+  test("SP-03a: handles three-level nesting", t => {
     let wireframe = `
 @scene: deep
 
-+--Level1------------+
-|                    |
-|  +--Level2------+ |
-|  |              | |
-|  |  +--Level3+ | |
-|  |  |  [ OK ] | | |
-|  |  +--------+ | |
-|  |              | |
-|  +--------------+ |
-|                    |
-+--------------------+
++--Level1---------------+
+|                       |
+| +--Level2-----------+ |
+| |                   | |
+| | +--Level3------+  | |
+| | |   [ OK ]     |  | |
+| | +--------------+  | |
+| |                   | |
+| +-------------------+ |
+|                       |
++-----------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
         // Verify level 1 box exists
         let hasLevel1 = scene.elements->Array.some(el =>
           switch el {
-          | Box({name: Some(n)}) => n->String.includes("Level1")
+          | Types.Box({name: Some(n)}) => n->String.includes("Level1")
           | _ => false
           }
         )
-        expect(hasLevel1)->toBe(true)
+        t->expect(hasLevel1)->Expect.toBe(true)
       }
-    | Error(_) => fail("Expected successful parse of deeply nested boxes")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse of deeply nested boxes
     }
   })
 })
@@ -307,8 +334,8 @@ describe("SemanticParser Integration - Nested Boxes", () => {
 // TEST CASE SP-04: Horizontal Dividers
 // ============================================================================
 
-describe("SemanticParser Integration - Dividers", () => {
-  test("SP-04: detects horizontal dividers within boxes", () => {
+describe("SemanticParser Integration - Dividers", t => {
+  test("SP-04: detects horizontal dividers within boxes", t => {
     let wireframe = `
 @scene: sections
 
@@ -321,30 +348,30 @@ describe("SemanticParser Integration - Dividers", () => {
 +------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
         // Check for divider element
         let hasDivider = scene.elements->Array.some(el =>
           switch el {
-          | Divider(_) => true
+          | Types.Divider(_) => true
           | _ => false
           }
         )
 
         // Note: Dividers might be represented as box boundaries
         // or as separate elements depending on implementation
-        expect(Array.length(scene.elements))->toBeGreaterThan(0)
+        t->expect(Array.length(scene.elements))->Expect.Int.toBeGreaterThan(0)
       }
     | Error(errors) => {
         Console.error(errors)
-        fail("SP-04: Expected successful parse with dividers")
+        t->expect(true)->Expect.toBe(false) // fail: SP-04: Expected successful parse with dividers
       }
     }
   })
 
-  test("SP-04a: handles multiple dividers in one box", () => {
+  test("SP-04a: handles multiple dividers in one box", t => {
     let wireframe = `
 @scene: multi
 
@@ -357,15 +384,15 @@ describe("SemanticParser Integration - Dividers", () => {
 +----------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        expect(Array.length(ast.scenes))->toBe(1)
+        t->expect(Array.length(ast.scenes))->Expect.toBe(1)
 
         // Verify scene has content
-        let scene = ast.scenes[0]
-        expect(Array.length(scene.elements))->toBeGreaterThan(0)
+        let scene = ast.scenes->Array.getUnsafe(0)
+        t->expect(Array.length(scene.elements))->Expect.Int.toBeGreaterThan(0)
       }
-    | Error(_) => fail("Expected successful parse with multiple dividers")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse with multiple dividers
     }
   })
 })
@@ -374,8 +401,8 @@ describe("SemanticParser Integration - Dividers", () => {
 // TEST CASE SP-05: All Element Types Recognition
 // ============================================================================
 
-describe("SemanticParser Integration - All Element Types", () => {
-  test("SP-05: recognizes all supported element types in one scene", () => {
+describe("SemanticParser Integration - All Element Types", t => {
+  test("SP-05: recognizes all supported element types in one scene", t => {
     let wireframe = `
 @scene: alltypes
 
@@ -396,76 +423,76 @@ describe("SemanticParser Integration - All Element Types", () => {
 +----------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
         // Check for emphasis text
         let hasEmphasis = scene.elements->Array.some(el =>
           switch el {
-          | Text({emphasis: true}) => true
+          | Types.Text({emphasis: true}) => true
           | _ => false
           }
         )
-        expect(hasEmphasis)->toBe(true)
+        t->expect(hasEmphasis)->Expect.toBe(true)
 
         // Check for plain text
         let hasPlainText = scene.elements->Array.some(el =>
           switch el {
-          | Text({emphasis: false}) => true
+          | Types.Text({emphasis: false}) => true
           | _ => false
           }
         )
-        expect(hasPlainText)->toBe(true)
+        t->expect(hasPlainText)->Expect.toBe(true)
 
         // Check for button
         let hasButton = scene.elements->Array.some(el =>
           switch el {
-          | Button(_) => true
+          | Types.Button(_) => true
           | _ => false
           }
         )
-        expect(hasButton)->toBe(true)
+        t->expect(hasButton)->Expect.toBe(true)
 
         // Check for input
         let hasInput = scene.elements->Array.some(el =>
           switch el {
-          | Input(_) => true
+          | Types.Input(_) => true
           | _ => false
           }
         )
-        expect(hasInput)->toBe(true)
+        t->expect(hasInput)->Expect.toBe(true)
 
         // Check for link
         let hasLink = scene.elements->Array.some(el =>
           switch el {
-          | Link(_) => true
+          | Types.Link(_) => true
           | _ => false
           }
         )
-        expect(hasLink)->toBe(true)
+        t->expect(hasLink)->Expect.toBe(true)
 
         // Check for checked checkbox
         let hasCheckedBox = scene.elements->Array.some(el =>
           switch el {
-          | Checkbox({checked: true}) => true
+          | Types.Checkbox({checked: true}) => true
           | _ => false
           }
         )
-        expect(hasCheckedBox)->toBe(true)
+        t->expect(hasCheckedBox)->Expect.toBe(true)
 
         // Check for unchecked checkbox
         let hasUncheckedBox = scene.elements->Array.some(el =>
           switch el {
-          | Checkbox({checked: false}) => true
+          | Types.Checkbox({checked: false}) => true
           | _ => false
           }
         )
-        expect(hasUncheckedBox)->toBe(true)
+        t->expect(hasUncheckedBox)->Expect.toBe(true)
       }
     | Error(errors) => {
         Console.error(errors)
-        fail("SP-05: Expected successful parse of all element types")
+        t->expect(true)->Expect.toBe(false) // fail: SP-05: Expected successful parse of all element types
       }
     }
   })
@@ -475,8 +502,8 @@ describe("SemanticParser Integration - All Element Types", () => {
 // TEST CASE SP-06: Element Alignment Calculation
 // ============================================================================
 
-describe("SemanticParser Integration - Alignment", () => {
-  test("SP-06: calculates element alignment based on position", () => {
+describe("SemanticParser Integration - Alignment", t => {
+  test("SP-06: calculates element alignment based on position", t => {
     let wireframe = `
 @scene: alignment
 
@@ -489,48 +516,48 @@ describe("SemanticParser Integration - Alignment", () => {
 +---------------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
         // Collect all buttons
-        let buttons = scene.elements->Array.keep(el =>
+        let buttons = scene.elements->Array.filter(el =>
           switch el {
-          | Button(_) => true
+          | Types.Button(_) => true
           | _ => false
           }
         )
 
-        expect(Array.length(buttons))->toBe(3)
+        t->expect(Array.length(buttons))->Expect.toBe(3)
 
         // Check alignments (order may vary)
         let hasLeft = buttons->Array.some(el =>
           switch el {
-          | Button({align: Left}) => true
+          | Types.Button({align: Types.Left}) => true
           | _ => false
           }
         )
-        expect(hasLeft)->toBe(true)
+        t->expect(hasLeft)->Expect.toBe(true)
 
         let hasCenter = buttons->Array.some(el =>
           switch el {
-          | Button({align: Center}) => true
+          | Types.Button({align: Types.Center}) => true
           | _ => false
           }
         )
-        expect(hasCenter)->toBe(true)
+        t->expect(hasCenter)->Expect.toBe(true)
 
         let hasRight = buttons->Array.some(el =>
           switch el {
-          | Button({align: Right}) => true
+          | Types.Button({align: Types.Right}) => true
           | _ => false
           }
         )
-        expect(hasRight)->toBe(true)
+        t->expect(hasRight)->Expect.toBe(true)
       }
     | Error(errors) => {
         Console.error(errors)
-        fail("SP-06: Expected successful parse with alignment")
+        t->expect(true)->Expect.toBe(false) // fail: SP-06: Expected successful parse with alignment
       }
     }
   })
@@ -540,8 +567,8 @@ describe("SemanticParser Integration - Alignment", () => {
 // TEST CASE SP-07-11: Individual Element Type Tests
 // ============================================================================
 
-describe("SemanticParser Integration - Button Elements", () => {
-  test("SP-07: parses button with simple text", () => {
+describe("SemanticParser Integration - Button Elements", t => {
+  test("SP-07: parses button with simple text", t => {
     let wireframe = `
 @scene: btn
 +------------+
@@ -549,30 +576,30 @@ describe("SemanticParser Integration - Button Elements", () => {
 +------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
         let button = scene.elements->Array.find(el =>
           switch el {
-          | Button(_) => true
+          | Types.Button(_) => true
           | _ => false
           }
         )
 
         switch button {
-        | Some(Button({text, id})) => {
-            expect(text)->toBe("Submit")
-            expect(id)->toBe("submit")
+        | Some(Types.Button({text, id})) => {
+            t->expect(text)->Expect.toBe("Submit")
+            t->expect(id)->Expect.toBe("submit")
           }
-        | _ => fail("Expected to find button")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find button
         }
       }
-    | Error(_) => fail("Expected successful parse")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
     }
   })
 
-  test("SP-07a: parses button with multi-word text", () => {
+  test("SP-07a: parses button with multi-word text", t => {
     let wireframe = `
 @scene: btn
 +--------------------+
@@ -580,27 +607,27 @@ describe("SemanticParser Integration - Button Elements", () => {
 +--------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let button = ast.scenes[0].elements->Array.find(el =>
+        let button = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
-          | Button({text}) => text === "Create Account"
+          | Types.Button({text}) => text === "Create Account"
           | _ => false
           }
         )
 
         switch button {
-        | Some(Button({id})) => expect(id)->toBe("create-account")
-        | _ => fail("Expected to find multi-word button")
+        | Some(Types.Button({id})) => t->expect(id)->Expect.toBe("create-account")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find multi-word button
         }
       }
-    | Error(_) => fail("Expected successful parse")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
     }
   })
 })
 
-describe("SemanticParser Integration - Input Elements", () => {
-  test("SP-08: parses input field with ID", () => {
+describe("SemanticParser Integration - Input Elements", t => {
+  test("SP-08: parses input field with ID", t => {
     let wireframe = `
 @scene: inp
 +----------+
@@ -608,25 +635,25 @@ describe("SemanticParser Integration - Input Elements", () => {
 +----------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let input = ast.scenes[0].elements->Array.find(el =>
+        let input = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
-          | Input(_) => true
+          | Types.Input(_) => true
           | _ => false
           }
         )
 
         switch input {
-        | Some(Input({id})) => expect(id)->toBe("email")
-        | _ => fail("Expected to find input")
+        | Some(Types.Input({id})) => t->expect(id)->Expect.toBe("email")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find input
         }
       }
-    | Error(_) => fail("Expected successful parse")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
     }
   })
 
-  test("SP-08a: parses input with label prefix", () => {
+  test("SP-08a: parses input with label prefix", t => {
     let wireframe = `
 @scene: inp
 +-----------------+
@@ -634,24 +661,24 @@ describe("SemanticParser Integration - Input Elements", () => {
 +-----------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let input = ast.scenes[0].elements->Array.find(el =>
+        let input = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
-          | Input({id: "email"}) => true
+          | Types.Input({id: "email"}) => true
           | _ => false
           }
         )
 
-        expect(input)->not->toBe(None)
+        t->expect(input)->Expect.not->Expect.toBe(None)
       }
-    | Error(_) => fail("Expected successful parse")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
     }
   })
 })
 
-describe("SemanticParser Integration - Link Elements", () => {
-  test("SP-09: parses link with quoted text", () => {
+describe("SemanticParser Integration - Link Elements", t => {
+  test("SP-09: parses link with quoted text", t => {
     let wireframe = `
 @scene: lnk
 +------------------+
@@ -659,30 +686,30 @@ describe("SemanticParser Integration - Link Elements", () => {
 +------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let link = ast.scenes[0].elements->Array.find(el =>
+        let link = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
-          | Link(_) => true
+          | Types.Link(_) => true
           | _ => false
           }
         )
 
         switch link {
-        | Some(Link({text, id})) => {
-            expect(text)->toBe("Click Here")
-            expect(id)->toBe("click-here")
+        | Some(Types.Link({text, id})) => {
+            t->expect(text)->Expect.toBe("Click Here")
+            t->expect(id)->Expect.toBe("click-here")
           }
-        | _ => fail("Expected to find link")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find link
         }
       }
-    | Error(_) => fail("Expected successful parse")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
     }
   })
 })
 
-describe("SemanticParser Integration - Checkbox Elements", () => {
-  test("SP-10: parses checked checkbox", () => {
+describe("SemanticParser Integration - Checkbox Elements", t => {
+  test("SP-10: parses checked checkbox", t => {
     let wireframe = `
 @scene: chk
 +-------------------+
@@ -690,25 +717,25 @@ describe("SemanticParser Integration - Checkbox Elements", () => {
 +-------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let checkbox = ast.scenes[0].elements->Array.find(el =>
+        let checkbox = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
-          | Checkbox({checked: true}) => true
+          | Types.Checkbox({checked: true}) => true
           | _ => false
           }
         )
 
         switch checkbox {
-        | Some(Checkbox({label})) => expect(label)->toBe("Accept terms")
-        | _ => fail("Expected to find checked checkbox")
+        | Some(Types.Checkbox({label})) => t->expect(label)->Expect.toBe("Accept terms")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find checked checkbox
         }
       }
-    | Error(_) => fail("Expected successful parse")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
     }
   })
 
-  test("SP-10a: parses unchecked checkbox", () => {
+  test("SP-10a: parses unchecked checkbox", t => {
     let wireframe = `
 @scene: chk
 +---------------------+
@@ -716,24 +743,24 @@ describe("SemanticParser Integration - Checkbox Elements", () => {
 +---------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let checkbox = ast.scenes[0].elements->Array.find(el =>
+        let checkbox = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
-          | Checkbox({checked: false}) => true
+          | Types.Checkbox({checked: false}) => true
           | _ => false
           }
         )
 
-        expect(checkbox)->not->toBe(None)
+        t->expect(checkbox)->Expect.not->Expect.toBe(None)
       }
-    | Error(_) => fail("Expected successful parse")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
     }
   })
 })
 
-describe("SemanticParser Integration - Emphasis Text", () => {
-  test("SP-11: parses emphasis text with asterisk", () => {
+describe("SemanticParser Integration - Emphasis Text", t => {
+  test("SP-11: parses emphasis text with asterisk", t => {
     let wireframe = `
 @scene: emp
 +-----------------+
@@ -741,21 +768,21 @@ describe("SemanticParser Integration - Emphasis Text", () => {
 +-----------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let emphasisText = ast.scenes[0].elements->Array.find(el =>
+        let emphasisText = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
-          | Text({emphasis: true}) => true
+          | Types.Text({emphasis: true}) => true
           | _ => false
           }
         )
 
         switch emphasisText {
-        | Some(Text({content})) => expect(content)->toContain("Important")
-        | _ => fail("Expected to find emphasis text")
+        | Some(Types.Text({content})) => t->expect(content)->Expect.String.toContain("Important")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find emphasis text
         }
       }
-    | Error(_) => fail("Expected successful parse")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
     }
   })
 })
@@ -764,8 +791,8 @@ describe("SemanticParser Integration - Emphasis Text", () => {
 // TEST CASE SP-12: Mixed Content Scene
 // ============================================================================
 
-describe("SemanticParser Integration - Mixed Content", () => {
-  test("SP-12: parses complex scene with mixed element types", () => {
+describe("SemanticParser Integration - Mixed Content", t => {
+  test("SP-12: parses complex scene with mixed element types", t => {
     let wireframe = `
 @scene: mixed
 
@@ -783,59 +810,59 @@ describe("SemanticParser Integration - Mixed Content", () => {
 +-------------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
         // Count different element types
-        let emphasisCount = scene.elements->Array.keep(el =>
+        let emphasisCount = scene.elements->Array.filter(el =>
           switch el {
-          | Text({emphasis: true}) => true
+          | Types.Text({emphasis: true}) => true
           | _ => false
           }
         )->Array.length
 
-        let inputCount = scene.elements->Array.keep(el =>
+        let inputCount = scene.elements->Array.filter(el =>
           switch el {
-          | Input(_) => true
+          | Types.Input(_) => true
           | _ => false
           }
         )->Array.length
 
-        let checkboxCount = scene.elements->Array.keep(el =>
+        let checkboxCount = scene.elements->Array.filter(el =>
           switch el {
-          | Checkbox(_) => true
+          | Types.Checkbox(_) => true
           | _ => false
           }
         )->Array.length
 
-        let buttonCount = scene.elements->Array.keep(el =>
+        let buttonCount = scene.elements->Array.filter(el =>
           switch el {
-          | Button(_) => true
+          | Types.Button(_) => true
           | _ => false
           }
         )->Array.length
 
-        let linkCount = scene.elements->Array.keep(el =>
+        let linkCount = scene.elements->Array.filter(el =>
           switch el {
-          | Link(_) => true
+          | Types.Link(_) => true
           | _ => false
           }
         )->Array.length
 
         // Verify all types are present
-        expect(emphasisCount)->toBeGreaterThan(0)
-        expect(inputCount)->toBeGreaterThanOrEqual(2) // name and email
-        expect(checkboxCount)->toBeGreaterThan(0)
-        expect(buttonCount)->toBeGreaterThan(0)
-        expect(linkCount)->toBeGreaterThan(0)
+        t->expect(emphasisCount)->Expect.Int.toBeGreaterThan(0)
+        t->expect(inputCount)->Expect.Int.toBeGreaterThanOrEqual(2) // name and email
+        t->expect(checkboxCount)->Expect.Int.toBeGreaterThan(0)
+        t->expect(buttonCount)->Expect.Int.toBeGreaterThan(0)
+        t->expect(linkCount)->Expect.Int.toBeGreaterThan(0)
 
         // Verify scene has substantial content
-        expect(Array.length(scene.elements))->toBeGreaterThan(5)
+        t->expect(Array.length(scene.elements))->Expect.Int.toBeGreaterThan(5)
       }
     | Error(errors) => {
         Console.error(errors)
-        fail("SP-12: Expected successful parse of mixed content scene")
+        t->expect(true)->Expect.toBe(false) // fail: SP-12: Expected successful parse of mixed content scene
       }
     }
   })
@@ -845,8 +872,8 @@ describe("SemanticParser Integration - Mixed Content", () => {
 // TEST CASE SP-14: Scene Directives Parsing
 // ============================================================================
 
-describe("SemanticParser Integration - Scene Directives", () => {
-  test("SP-14: parses scene directives correctly", () => {
+describe("SemanticParser Integration - Scene Directives", t => {
+  test("SP-14: parses scene directives correctly", t => {
     let wireframe = `
 @scene: test
 @title: Test Scene
@@ -857,22 +884,22 @@ describe("SemanticParser Integration - Scene Directives", () => {
 +----------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
-        expect(scene.id)->toBe("test")
-        expect(scene.title)->toBe("Test Scene")
-        expect(scene.transition)->toBe("fade")
+        t->expect(scene.id)->Expect.toBe("test")
+        t->expect(scene.title)->Expect.toBe("Test Scene")
+        t->expect(scene.transition)->Expect.toBe("fade")
       }
     | Error(errors) => {
         Console.error(errors)
-        fail("SP-14: Expected successful parse of scene directives")
+        t->expect(true)->Expect.toBe(false) // fail: SP-14: Expected successful parse of scene directives
       }
     }
   })
 
-  test("SP-14a: handles missing optional directives", () => {
+  test("SP-14a: handles missing optional directives", t => {
     let wireframe = `
 @scene: minimal
 
@@ -881,15 +908,15 @@ describe("SemanticParser Integration - Scene Directives", () => {
 +----------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let scene = ast.scenes[0]
+        let scene = ast.scenes->Array.getUnsafe(0)
 
-        expect(scene.id)->toBe("minimal")
+        t->expect(scene.id)->Expect.toBe("minimal")
         // Title and transition should have defaults or be empty
-        expect(Array.length(ast.scenes))->toBe(1)
+        t->expect(Array.length(ast.scenes))->Expect.toBe(1)
       }
-    | Error(_) => fail("Expected successful parse with minimal directives")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse with minimal directives
     }
   })
 })
@@ -898,8 +925,8 @@ describe("SemanticParser Integration - Scene Directives", () => {
 // TEST CASE SP-15: Empty Scene Handling
 // ============================================================================
 
-describe("SemanticParser Integration - Empty Scenes", () => {
-  test("SP-15: handles empty scene gracefully", () => {
+describe("SemanticParser Integration - Empty Scenes", t => {
+  test("SP-15: handles empty scene gracefully", t => {
     let wireframe = `
 @scene: empty
 
@@ -908,21 +935,21 @@ describe("SemanticParser Integration - Empty Scenes", () => {
 +-------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        expect(Array.length(ast.scenes))->toBe(1)
+        t->expect(Array.length(ast.scenes))->Expect.toBe(1)
 
-        let scene = ast.scenes[0]
-        expect(scene.id)->toBe("empty")
+        let scene = ast.scenes->Array.getUnsafe(0)
+        t->expect(scene.id)->Expect.toBe("empty")
 
         // Empty scene should still have valid structure
-        expect(Array.isArray(scene.elements))->toBe(true)
+        t->expect(Array.isArray(scene.elements))->Expect.toBe(true)
       }
-    | Error(_) => fail("SP-15: Expected successful parse of empty scene")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: SP-15: Expected successful parse of empty scene
     }
   })
 
-  test("SP-15a: handles scene with only whitespace", () => {
+  test("SP-15a: handles scene with only whitespace", t => {
     let wireframe = `
 @scene: whitespace
 
@@ -933,14 +960,14 @@ describe("SemanticParser Integration - Empty Scenes", () => {
 +-----------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        expect(Array.length(ast.scenes))->toBe(1)
+        t->expect(Array.length(ast.scenes))->Expect.toBe(1)
 
-        let scene = ast.scenes[0]
-        expect(scene.id)->toBe("whitespace")
+        let scene = ast.scenes->Array.getUnsafe(0)
+        t->expect(scene.id)->Expect.toBe("whitespace")
       }
-    | Error(_) => fail("Expected successful parse of whitespace-only scene")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse of whitespace-only scene
     }
   })
 })
@@ -949,33 +976,32 @@ describe("SemanticParser Integration - Empty Scenes", () => {
 // EDGE CASES AND ERROR HANDLING
 // ============================================================================
 
-describe("SemanticParser Integration - Edge Cases", () => {
-  test("handles very long element text", () => {
-    let longText = "Very Long Button Text That Spans Multiple Words"
+describe("SemanticParser Integration - Edge Cases", t => {
+  test("handles very long element text", t => {
     let wireframe = `
 @scene: long
 
 +---------------------------------------------------+
-|  [ ${longText} ]  |
+|  [ Very Long Button Text That Spans ]             |
 +---------------------------------------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        let button = ast.scenes[0].elements->Array.find(el =>
+        let button = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
-          | Button(_) => true
+          | Types.Button(_) => true
           | _ => false
           }
         )
 
-        expect(button)->not->toBe(None)
+        t->expect(button)->Expect.not->Expect.toBe(None)
       }
-    | Error(_) => fail("Expected to handle long text")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected to handle long text
     }
   })
 
-  test("handles special characters in text", () => {
+  test("handles special characters in text", t => {
     let wireframe = `
 @scene: special
 
@@ -984,28 +1010,28 @@ describe("SemanticParser Integration - Edge Cases", () => {
 +-------------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        expect(Array.length(ast.scenes))->toBe(1)
+        t->expect(Array.length(ast.scenes))->Expect.toBe(1)
       }
-    | Error(_) => fail("Expected to handle special characters")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected to handle special characters
     }
   })
 
-  test("handles unicode characters", () => {
+  test("handles unicode characters", t => {
     let wireframe = `
 @scene: unicode
 
-+-----------+
-|  * 世界    |
-+-----------+
++-------------+
+|  * Hello    |
++-------------+
 `
 
-    switch WyreframeParser.parse(wireframe, None) {
+    switch Parser.parse(wireframe) {
     | Ok(ast) => {
-        expect(Array.length(ast.scenes))->toBe(1)
+        t->expect(Array.length(ast.scenes))->Expect.toBe(1)
       }
-    | Error(_) => fail("Expected to handle unicode")
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected to handle unicode
     }
   })
 })

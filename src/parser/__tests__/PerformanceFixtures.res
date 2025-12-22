@@ -9,13 +9,24 @@
  * @returns ASCII wireframe string
  */
 let generateWireframe = (targetLines: int): string => {
-  // Determine structure based on target lines
-  let (numScenes, boxesPerScene, elementsPerBox) = if targetLines <= 100 {
-    (1, 2, 4) // Simple: 1 scene, 2 boxes, 4 elements each
+  // Calculate structure to approximate target line count
+  // Each box produces roughly: 3 (borders) + 2 (empty) + elementsPerBox * 1.5 (elements + spacing) lines
+  // Each scene adds: 3 (header) + scene separators
+  // Formula: targetLines ≈ numScenes * (3 + boxesPerScene * (5 + elementsPerBox * 1.5))
+
+  // Use more granular scaling
+  let (numScenes, boxesPerScene, elementsPerBox) = if targetLines <= 50 {
+    (1, 3, 6) // ~45 lines
+  } else if targetLines <= 100 {
+    (2, 3, 6) // ~95 lines
+  } else if targetLines <= 200 {
+    (2, 5, 8) // ~185 lines
   } else if targetLines <= 500 {
-    (2, 4, 5) // Medium: 2 scenes, 4 boxes, 5 elements each
+    (3, 7, 10) // ~480 lines
+  } else if targetLines <= 1000 {
+    (4, 10, 12) // ~950 lines
   } else {
-    (4, 6, 8) // Large: 4 scenes, 6 boxes, 8 elements each
+    (6, 12, 14) // ~2000 lines
   }
 
   let scenes = []
@@ -36,7 +47,10 @@ let generateWireframe = (targetLines: int): string => {
       let boxWidth = 40
 
       // Box top border with name
-      let topBorder = `+--${boxName}${"-"->String.repeat(boxWidth - String.length(boxName) - 4)}+`
+      // Total width = boxWidth + 2 (for the two | characters on content lines)
+      // Top border: + -- Name dashes +
+      // Content:    | spaces |
+      let topBorder = `+--${boxName}${"-"->String.repeat(boxWidth - String.length(boxName) - 2)}+`
       scenes->Array.push(topBorder)->ignore
 
       // Empty line
@@ -137,20 +151,23 @@ let generateWireframe = (targetLines: int): string => {
 let generateSimpleBox = (~width: int=20, ~height: int=3, ~name: option<string>=None): string => {
   let lines = []
 
+  // Total width = width + 4 (for "| " and " |" on content lines)
+  let totalWidth = width + 4
+
   // Top border
   let topBorder = switch name {
   | Some(n) => {
       let nameStr = `--${n}--`
-      let padding = width - String.length(nameStr) + 2
+      let padding = totalWidth - 2 - String.length(nameStr) // -2 for the two +
       if padding < 0 {
-        `+${"-"->String.repeat(width + 2)}+` // Name too long, use plain border
+        `+${"-"->String.repeat(totalWidth - 2)}+` // Name too long, use plain border
       } else {
         let leftPad = padding / 2
         let rightPad = padding - leftPad
         `+${"-"->String.repeat(leftPad)}${nameStr}${"-"->String.repeat(rightPad)}+`
       }
     }
-  | None => `+${"-"->String.repeat(width + 2)}+`
+  | None => `+${"-"->String.repeat(totalWidth - 2)}+`
   }
   lines->Array.push(topBorder)->ignore
 
@@ -160,7 +177,7 @@ let generateSimpleBox = (~width: int=20, ~height: int=3, ~name: option<string>=N
   }
 
   // Bottom border
-  lines->Array.push(`+${"-"->String.repeat(width + 2)}+`)->ignore
+  lines->Array.push(`+${"-"->String.repeat(totalWidth - 2)}+`)->ignore
 
   lines->Array.joinWith("\n")
 }
@@ -172,44 +189,53 @@ let generateSimpleBox = (~width: int=20, ~height: int=3, ~name: option<string>=N
  * @returns ASCII wireframe with nested boxes
  */
 let generateNestedBoxes = (depth: int): string => {
-  let rec buildNested = (currentDepth: int, maxDepth: int, indent: int): array<string> => {
+  // Generate properly nested boxes where inner boxes are contained within outer boxes
+  // Each level reduces width by 4 (2 for indent + 2 for padding)
+  let baseWidth = 40
+
+  let rec buildNested = (currentDepth: int, maxDepth: int): array<string> => {
     if currentDepth > maxDepth {
       []
     } else {
       let lines = []
       let boxName = `Level${Int.toString(currentDepth)}`
-      let boxWidth = 50 - (currentDepth - 1) * 6
-      let indentStr = " "->String.repeat(indent)
+      let boxWidth = baseWidth - (currentDepth - 1) * 4
+      let innerPadding = 2 // Padding inside box for nested content
 
       // Top border
-      let topBorder = `${indentStr}+--${boxName}${"-"->String.repeat(boxWidth - String.length(boxName) - 4)}+`
+      let topBorder = `+--${boxName}${"-"->String.repeat(boxWidth - String.length(boxName) - 2)}+`
       lines->Array.push(topBorder)->ignore
 
       // Empty line
-      lines->Array.push(`${indentStr}|${" "->String.repeat(boxWidth)}|`)->ignore
+      lines->Array.push(`|${" "->String.repeat(boxWidth)}|`)->ignore
 
       // Nested content
       if currentDepth < maxDepth {
-        let nested = buildNested(currentDepth + 1, maxDepth, indent + 2)
-        nested->Array.forEach(line => lines->Array.push(line)->ignore)
+        let nested = buildNested(currentDepth + 1, maxDepth)
+        // Wrap each nested line with outer box borders
+        nested->Array.forEach(nestedLine => {
+          let paddedLine = `|${" "->String.repeat(innerPadding)}${nestedLine}${" "->String.repeat(boxWidth - innerPadding - String.length(nestedLine))}|`
+          lines->Array.push(paddedLine)->ignore
+        })
       } else {
-        // Leaf content
-        lines->Array.push(`${indentStr}|  Content at depth ${Int.toString(currentDepth)}${" "->String.repeat(
-            boxWidth - 25,
-          )}|`)->ignore
+        // Leaf content - add a button
+        let buttonText = "[ OK ]"
+        let padding = (boxWidth - String.length(buttonText)) / 2
+        let contentLine = `|${" "->String.repeat(padding)}${buttonText}${" "->String.repeat(boxWidth - padding - String.length(buttonText))}|`
+        lines->Array.push(contentLine)->ignore
       }
 
       // Empty line
-      lines->Array.push(`${indentStr}|${" "->String.repeat(boxWidth)}|`)->ignore
+      lines->Array.push(`|${" "->String.repeat(boxWidth)}|`)->ignore
 
       // Bottom border
-      lines->Array.push(`${indentStr}+${"-"->String.repeat(boxWidth)}+`)->ignore
+      lines->Array.push(`+${"-"->String.repeat(boxWidth)}+`)->ignore
 
       lines
     }
   }
 
-  let lines = buildNested(1, depth, 0)
+  let lines = buildNested(1, depth)
   lines->Array.joinWith("\n")
 }
 

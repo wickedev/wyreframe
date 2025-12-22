@@ -28,12 +28,12 @@ type errorCode =
       topLeft: Position.t,
       topWidth: int,
       bottomWidth: int,
-    }) // Top and bottom widths don't match (REQ-7, Task 12)
+    }) // Top and bottom widths don't match (REQ-7)
   | MisalignedPipe({
       position: Position.t,
       expectedCol: int,
       actualCol: int,
-    }) // Vertical pipe not aligned with box edge (REQ-7, Task 13)
+    }) // Vertical pipe not aligned with box edge (REQ-7)
   | OverlappingBoxes({
       box1Name: option<string>,
       box2Name: option<string>,

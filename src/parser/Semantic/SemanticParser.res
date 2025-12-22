@@ -1,7 +1,5 @@
 // SemanticParser.res
 // Stage 3: Semantic parsing - extracts and interprets box content
-// Task 30: Box Content Extraction
-// Task 32: Scene Directive Parsing
 
 open Types
 
@@ -12,7 +10,7 @@ open Types
 /**
  * Box type representing a rectangular container with bounds and children.
  * This matches the Box variant from the element type but is used during
- * the shape detection phase before full element parsing.
+ * the shape detection stage before full element parsing.
  */
 type rec box = {
   name: option<string>,
@@ -32,7 +30,7 @@ type sceneMetadata = {
 }
 
 // ============================================================================
-// Box Content Extraction (Task 30)
+// Box Content Extraction
 // ============================================================================
 
 /**
@@ -48,7 +46,7 @@ let isWithinChildBoxGrid = (row: int, col: int, children: array<box>): bool => {
 /**
  * Extracts content lines from within a box's bounds, excluding child box regions.
  *
- * This function is the core of Task 30: SemanticParser - Box Content Extraction
+ * Core box content extraction function for SemanticParser
  *
  * Algorithm:
  * 1. Calculate content area by excluding border rows (top and bottom)
@@ -223,7 +221,7 @@ let getContentLineCount = (box: box, _grid: Grid.t): int => {
 }
 
 // ============================================================================
-// Scene Directive Parsing (Task 32)
+// Scene Directive Parsing
 // ============================================================================
 
 /**
@@ -441,7 +439,7 @@ let groupContentByScenes = (wireframeText: string): array<(sceneMetadata, array<
 }
 
 // ============================================================================
-// Task 30: Box Content Extraction
+// Box Content Extraction (continued)
 // ============================================================================
 
 /**
@@ -574,7 +572,7 @@ let extractContentLines = (box: box, gridCells: array<array<cellChar>>): array<s
 }
 
 // ============================================================================
-// Task 31: Element Recognition Pipeline
+// Element Recognition Pipeline
 // ============================================================================
 
 /**
@@ -598,6 +596,18 @@ type inlineSegment =
  * @param line - The content line to split
  * @returns Array of inline segments with column offsets
  */
+/**
+ * Check if content inside brackets is a checkbox pattern.
+ * Checkbox patterns: "x", "X", " " (single character only)
+ */
+let isCheckboxContent = (content: string): bool => {
+  let trimmed = content->String.trim
+  let lowerContent = trimmed->String.toLowerCase
+  // [x] or [X] - checked checkbox
+  // [ ] - unchecked checkbox (empty or just whitespace)
+  lowerContent === "x" || trimmed === ""
+}
+
 let splitInlineSegments = (line: string): array<inlineSegment> => {
   let segments = []
   let currentText = ref("")
@@ -610,15 +620,6 @@ let splitInlineSegments = (line: string): array<inlineSegment> => {
 
     // Check for button pattern [ ... ]
     if char === "[" {
-      // Flush any accumulated text
-      let text = currentText.contents->String.trim
-      if text !== "" {
-        // Find actual start position (skip leading whitespace)
-        let leadingSpaces = String.length(currentText.contents) - String.length(currentText.contents->String.trimStart)
-        segments->Array.push(TextSegment(text, currentTextStart.contents + leadingSpaces))->ignore
-      }
-      currentText := ""
-
       // Find matching ]
       let buttonStart = i.contents
       let start = i.contents + 1
@@ -633,15 +634,43 @@ let splitInlineSegments = (line: string): array<inlineSegment> => {
 
       switch endPos.contents {
       | Some(end) => {
-          let buttonText = line->String.slice(~start, ~end)->String.trim
-          if buttonText !== "" {
-            segments->Array.push(ButtonSegment(buttonText, buttonStart))->ignore
+          let bracketContent = line->String.slice(~start, ~end)
+
+          // Check if this is a checkbox pattern [x], [X], or [ ]
+          // If so, treat the whole thing as text, not a button
+          if isCheckboxContent(bracketContent) {
+            // Include the brackets in text accumulation
+            if currentText.contents === "" {
+              currentTextStart := i.contents
+            }
+            // Add the entire checkbox pattern to current text
+            let checkboxText = "[" ++ bracketContent ++ "]"
+            currentText := currentText.contents ++ checkboxText
+            i := end + 1
+          } else {
+            // This is a button pattern
+            // Flush any accumulated text
+            let text = currentText.contents->String.trim
+            if text !== "" {
+              // Find actual start position (skip leading whitespace)
+              let leadingSpaces = String.length(currentText.contents) - String.length(currentText.contents->String.trimStart)
+              segments->Array.push(TextSegment(text, currentTextStart.contents + leadingSpaces))->ignore
+            }
+            currentText := ""
+
+            let buttonText = bracketContent->String.trim
+            if buttonText !== "" {
+              segments->Array.push(ButtonSegment(buttonText, buttonStart))->ignore
+            }
+            i := end + 1
+            currentTextStart := i.contents
           }
-          i := end + 1
-          currentTextStart := i.contents
         }
       | None => {
           // No matching ], treat as regular text
+          if currentText.contents === "" {
+            currentTextStart := i.contents
+          }
           currentText := currentText.contents ++ char
           i := i.contents + 1
         }
@@ -863,8 +892,10 @@ let segmentToElement = (
         ->Js.String2.replaceByRe(%re("/-+/g"), "-")
         ->Js.String2.replaceByRe(%re("/^-+|-+$/g"), "")
 
+      // Use "[ text ]" format (with spaces) to match visual button width for alignment
+      let buttonContent = "[ " ++ text ++ " ]"
       let align = AlignmentCalc.calculateWithStrategy(
-        "[" ++ text ++ "]",
+        buttonContent,
         position,
         bounds,
         AlignmentCalc.RespectPosition,
@@ -945,23 +976,31 @@ let parseContentLine = (
       }))
     } else if segments->Array.length === 1 {
       // Single segment - check if it's a special element
+      // Need to account for leading spaces from the original line since
+      // splitInlineSegments operates on the trimmed string
+      let leadingSpaces = {
+        let original = line
+        let trimmedStart = original->String.trimStart
+        original->String.length - trimmedStart->String.length
+      }
+
       switch segments->Array.get(0) {
       | Some(ButtonSegment(text, colOffset)) => {
-          let actualCol = baseCol + colOffset
+          // Add leading spaces to colOffset for correct position calculation
+          let actualCol = baseCol + leadingSpaces + colOffset
           let position = Position.make(row, actualCol)
-          let buttonContent = "[" ++ text ++ "]"
+          // Use "[ text ]" format (with spaces) to match visual button width
+          let buttonContent = "[ " ++ text ++ " ]"
           Some(registry->ParserRegistry.parse(buttonContent, position, box.bounds))
         }
       | Some(LinkSegment(text, colOffset)) => {
-          Some(segmentToElement(LinkSegment(text, colOffset), basePosition, baseCol, box.bounds))
+          // For LinkSegment, we also need to account for leading spaces
+          let actualCol = baseCol + leadingSpaces + colOffset
+          let adjustedPosition = Position.make(basePosition.row, actualCol)
+          Some(segmentToElement(LinkSegment(text, colOffset), adjustedPosition, baseCol + leadingSpaces, box.bounds))
         }
       | Some(TextSegment(_, _)) | None => {
           // For single text segment, use original position calculation
-          let leadingSpaces = {
-            let original = line
-            let trimmedStart = original->String.trimStart
-            original->String.length - trimmedStart->String.length
-          }
           let position = Position.make(row, baseCol + leadingSpaces)
           Some(registry->ParserRegistry.parse(trimmed, position, box.bounds))
         }
@@ -1166,7 +1205,7 @@ let rec parseBoxRecursive = (
 }
 
 // ============================================================================
-// Task 29: AST Builder
+// AST Builder
 // ============================================================================
 
 /**
@@ -1203,7 +1242,7 @@ let buildAST = (scenes: array<scene>): ast => {
 }
 
 // ============================================================================
-// Task 33: Main Parse Function
+// Main Parse Function
 // ============================================================================
 
 /**
@@ -1242,7 +1281,6 @@ type parseResult = result<ast, array<ErrorTypes.t>>
  * @returns Result<ast, errors> - Either complete AST or array of parse errors
  *
  * Requirements: REQ-15 (Complete AST generation)
- * Integrates: Tasks 28-32
  */
 let parse = (context: parseContext): parseResult => {
   let errors = []

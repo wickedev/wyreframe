@@ -8,19 +8,24 @@ open Types
 
 /**
  * Regular expression pattern for matching quoted text.
- * Matches: "text content" where content can include any character except unescaped quotes
+ * Matches: "text content" where content can include escaped quotes (\")
  *
  * Pattern breakdown:
  * - " : Opening quote
- * - [^"]+ : One or more characters that are not quotes
+ * - ((?:[^"\\]|\\.)+) : One or more of either:
+ *   - [^"\\] : any character except quote or backslash
+ *   - \\. : a backslash followed by any character (handles escaped quotes)
  * - " : Closing quote
+ *
+ * Using %raw to avoid ReScript's regex escaping complexity
  */
-let linkPattern = %re("/\"([^\"]+)\"/")
+let linkPattern: Js.Re.t = %raw(`/"((?:[^"\\]|\\.)+)"/`)
 
 /**
  * Quick check pattern for canParse (faster, no capture groups)
+ * Handles escaped quotes within the quoted text
  */
-let quickPattern = %re("/\"[^\"]+\"/")
+let quickPattern: Js.Re.t = %raw(`/"(?:[^"\\]|\\.)+"/`)
 
 /**
  * Convert text to a URL-friendly slug identifier.
@@ -59,7 +64,9 @@ let slugify = (text: string): string => {
  * @return Text with escape sequences resolved
  */
 let unescapeQuotes = (text: string): string => {
-  text->Js.String2.replaceByRe(%re("/\\\\\"/g"), "\"")
+  // Match backslash followed by quote and replace with just quote
+  // Use raw JS to avoid ReScript escaping complexity
+  %raw(`text.replace(/\\"/g, '"')`)
 }
 
 /**

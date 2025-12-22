@@ -16,7 +16,7 @@ type hierarchyError =
   | CircularNesting
 
 // ============================================================================
-// Task 15: Containment Detection
+// Containment Detection
 // ============================================================================
 
 /**
@@ -37,7 +37,7 @@ let contains = (outer: Bounds.t, inner: Bounds.t): bool => {
 }
 
 // ============================================================================
-// Task 16: Parent-Child Relationships
+// Parent-Child Relationships
 // ============================================================================
 
 /**
@@ -189,7 +189,7 @@ let rec getDepth = (box: box, allBoxes: array<box>): int => {
 }
 
 // ============================================================================
-// Task 42: Deep Nesting Warning Detection
+// Deep Nesting Warning Detection
 // ============================================================================
 
 /**

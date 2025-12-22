@@ -7,13 +7,13 @@
 // - Identifier extraction
 // - Edge cases (special characters, empty strings, etc.)
 
-open RescriptCore.Test
+open Vitest
 
 // Helper to create a test position
-let testPosition = Position.make(5, 10)
+let testPosition = Types.Position.make(5, 10)
 
 // Helper to create test bounds
-let testBounds: Types.bounds = {
+let testBounds: Types.Bounds.t = {
   top: 0,
   left: 0,
   bottom: 10,
@@ -21,214 +21,214 @@ let testBounds: Types.bounds = {
 }
 
 describe("InputParser - canParse", () => {
-  test("recognizes valid input field '#email'", () => {
+  test("recognizes valid input field '#email'", t => {
     let result = InputParser.canParse("#email")
-    Assert.deepEqual(result, true)
+    t->expect(result)->Expect.toBe(true)
   })
 
-  test("recognizes valid input field '#password'", () => {
+  test("recognizes valid input field '#password'", t => {
     let result = InputParser.canParse("#password")
-    Assert.deepEqual(result, true)
+    t->expect(result)->Expect.toBe(true)
   })
 
-  test("recognizes valid input field with numbers '#password123'", () => {
+  test("recognizes valid input field with numbers '#password123'", t => {
     let result = InputParser.canParse("#password123")
-    Assert.deepEqual(result, true)
+    t->expect(result)->Expect.toBe(true)
   })
 
-  test("recognizes valid input field with underscores '#user_name'", () => {
+  test("recognizes valid input field with underscores '#user_name'", t => {
     let result = InputParser.canParse("#user_name")
-    Assert.deepEqual(result, true)
+    t->expect(result)->Expect.toBe(true)
   })
 
-  test("recognizes valid input field with leading/trailing spaces '  #email  '", () => {
+  test("recognizes valid input field with leading/trailing spaces '  #email  '", t => {
     let result = InputParser.canParse("  #email  ")
-    Assert.deepEqual(result, true)
+    t->expect(result)->Expect.toBe(true)
   })
 
-  test("rejects input with hyphen '#first-name'", () => {
+  test("rejects input with hyphen '#first-name'", t => {
     let result = InputParser.canParse("#first-name")
-    Assert.deepEqual(result, false)
+    t->expect(result)->Expect.toBe(false)
   })
 
-  test("rejects input with space after hash '# email'", () => {
+  test("rejects input with space after hash '# email'", t => {
     let result = InputParser.canParse("# email")
-    Assert.deepEqual(result, false)
+    t->expect(result)->Expect.toBe(false)
   })
 
-  test("rejects input without hash 'email'", () => {
+  test("rejects input without hash 'email'", t => {
     let result = InputParser.canParse("email")
-    Assert.deepEqual(result, false)
+    t->expect(result)->Expect.toBe(false)
   })
 
-  test("rejects empty string", () => {
+  test("rejects empty string", t => {
     let result = InputParser.canParse("")
-    Assert.deepEqual(result, false)
+    t->expect(result)->Expect.toBe(false)
   })
 
-  test("rejects hash only '#'", () => {
+  test("rejects hash only '#'", t => {
     let result = InputParser.canParse("#")
-    Assert.deepEqual(result, false)
+    t->expect(result)->Expect.toBe(false)
   })
 
-  test("rejects input with special characters '#email@domain'", () => {
+  test("rejects input with special characters '#email@domain'", t => {
     let result = InputParser.canParse("#email@domain")
-    Assert.deepEqual(result, false)
+    t->expect(result)->Expect.toBe(false)
   })
 
-  test("rejects input with dots '#email.address'", () => {
+  test("rejects input with dots '#email.address'", t => {
     let result = InputParser.canParse("#email.address")
-    Assert.deepEqual(result, false)
+    t->expect(result)->Expect.toBe(false)
   })
 
-  test("rejects button syntax '[ Submit ]'", () => {
+  test("rejects button syntax '[ Submit ]'", t => {
     let result = InputParser.canParse("[ Submit ]")
-    Assert.deepEqual(result, false)
+    t->expect(result)->Expect.toBe(false)
   })
 
-  test("rejects link syntax '\"Click Here\"'", () => {
+  test("rejects link syntax '\"Click Here\"'", t => {
     let result = InputParser.canParse("\"Click Here\"")
-    Assert.deepEqual(result, false)
+    t->expect(result)->Expect.toBe(false)
   })
 })
 
 describe("InputParser - parse", () => {
-  test("parses valid input '#email' and extracts identifier", () => {
+  test("parses valid input '#email' and extracts identifier", t => {
     let result = InputParser.parse("#email", testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({id, placeholder, position})) => {
-        Assert.deepEqual(id, "email")
-        Assert.deepEqual(placeholder, None)
-        Assert.deepEqual(position.row, 5)
-        Assert.deepEqual(position.col, 10)
+        t->expect(id)->Expect.toBe("email")
+        t->expect(placeholder)->Expect.toBe(None)
+        t->expect(position.row)->Expect.toBe(5)
+        t->expect(position.col)->Expect.toBe(10)
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("parses valid input '#password' and extracts identifier", () => {
+  test("parses valid input '#password' and extracts identifier", t => {
     let result = InputParser.parse("#password", testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({id})) => {
-        Assert.deepEqual(id, "password")
+        t->expect(id)->Expect.toBe("password")
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("parses input with numbers '#password123'", () => {
+  test("parses input with numbers '#password123'", t => {
     let result = InputParser.parse("#password123", testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({id})) => {
-        Assert.deepEqual(id, "password123")
+        t->expect(id)->Expect.toBe("password123")
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("parses input with underscores '#user_name'", () => {
+  test("parses input with underscores '#user_name'", t => {
     let result = InputParser.parse("#user_name", testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({id})) => {
-        Assert.deepEqual(id, "user_name")
+        t->expect(id)->Expect.toBe("user_name")
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("handles leading/trailing whitespace '  #email  '", () => {
+  test("handles leading/trailing whitespace '  #email  '", t => {
     let result = InputParser.parse("  #email  ", testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({id})) => {
-        Assert.deepEqual(id, "email")
+        t->expect(id)->Expect.toBe("email")
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("returns None for invalid input '#first-name' (contains hyphen)", () => {
+  test("returns None for invalid input '#first-name' (contains hyphen)", t => {
     let result = InputParser.parse("#first-name", testPosition, testBounds)
-    Assert.deepEqual(result, None)
+    t->expect(result)->Expect.toBe(None)
   })
 
-  test("returns None for invalid input '# email' (space after hash)", () => {
+  test("returns None for invalid input '# email' (space after hash)", t => {
     let result = InputParser.parse("# email", testPosition, testBounds)
-    Assert.deepEqual(result, None)
+    t->expect(result)->Expect.toBe(None)
   })
 
-  test("returns None for text without hash 'email'", () => {
+  test("returns None for text without hash 'email'", t => {
     let result = InputParser.parse("email", testPosition, testBounds)
-    Assert.deepEqual(result, None)
+    t->expect(result)->Expect.toBe(None)
   })
 
-  test("returns None for empty string", () => {
+  test("returns None for empty string", t => {
     let result = InputParser.parse("", testPosition, testBounds)
-    Assert.deepEqual(result, None)
+    t->expect(result)->Expect.toBe(None)
   })
 
-  test("returns None for hash only '#'", () => {
+  test("returns None for hash only '#'", t => {
     let result = InputParser.parse("#", testPosition, testBounds)
-    Assert.deepEqual(result, None)
+    t->expect(result)->Expect.toBe(None)
   })
 
-  test("returns None for input with special characters '#email@domain'", () => {
+  test("returns None for input with special characters '#email@domain'", t => {
     let result = InputParser.parse("#email@domain", testPosition, testBounds)
-    Assert.deepEqual(result, None)
+    t->expect(result)->Expect.toBe(None)
   })
 
-  test("returns None for input with dots '#email.address'", () => {
+  test("returns None for input with dots '#email.address'", t => {
     let result = InputParser.parse("#email.address", testPosition, testBounds)
-    Assert.deepEqual(result, None)
+    t->expect(result)->Expect.toBe(None)
   })
 
-  test("preserves position information correctly", () => {
-    let customPosition = Position.make(15, 25)
+  test("preserves position information correctly", t => {
+    let customPosition = Types.Position.make(15, 25)
     let result = InputParser.parse("#test", customPosition, testBounds)
 
     switch result {
     | Some(Types.Input({position})) => {
-        Assert.deepEqual(position.row, 15)
-        Assert.deepEqual(position.col, 25)
+        t->expect(position.row)->Expect.toBe(15)
+        t->expect(position.col)->Expect.toBe(25)
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("placeholder is always None", () => {
+  test("placeholder is always None", t => {
     let result = InputParser.parse("#email", testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({placeholder})) => {
-        Assert.deepEqual(placeholder, None)
+        t->expect(placeholder)->Expect.toBe(None)
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 })
 
 describe("InputParser - make", () => {
-  test("creates parser with priority 90", () => {
+  test("creates parser with priority 90", t => {
     let parser = InputParser.make()
-    Assert.deepEqual(parser.priority, 90)
+    t->expect(parser.priority)->Expect.toBe(90)
   })
 
-  test("created parser canParse matches standalone canParse", () => {
+  test("created parser canParse matches standalone canParse", t => {
     let parser = InputParser.make()
     let testCases = ["#email", "#password", "invalid", "# test", "#test-123"]
 
     testCases->Array.forEach(testCase => {
       let expected = InputParser.canParse(testCase)
       let actual = parser.canParse(testCase)
-      Assert.deepEqual(actual, expected)
+      t->expect(actual)->Expect.toBe(expected)
     })
   })
 
-  test("created parser parse matches standalone parse", () => {
+  test("created parser parse matches standalone parse", t => {
     let parser = InputParser.make()
 
     let result1 = InputParser.parse("#email", testPosition, testBounds)
@@ -236,69 +236,69 @@ describe("InputParser - make", () => {
 
     switch (result1, result2) {
     | (Some(Types.Input({id: id1})), Some(Types.Input({id: id2}))) => {
-        Assert.deepEqual(id1, id2)
+        t->expect(id1)->Expect.toBe(id2)
       }
-    | _ => Assert.fail("Both should return Input elements")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Both should return Input elements
     }
   })
 })
 
 describe("InputParser - edge cases", () => {
-  test("handles very long identifier", () => {
+  test("handles very long identifier", t => {
     let longId = "a"->String.repeat(100)
     let input = "#" ++ longId
     let result = InputParser.parse(input, testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({id})) => {
-        Assert.deepEqual(id, longId)
+        t->expect(id)->Expect.toBe(longId)
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("handles single character identifier '#x'", () => {
+  test("handles single character identifier '#x'", t => {
     let result = InputParser.parse("#x", testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({id})) => {
-        Assert.deepEqual(id, "x")
+        t->expect(id)->Expect.toBe("x")
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("handles identifier starting with digit '#1password'", () => {
+  test("handles identifier starting with digit '#1password'", t => {
     // Note: \w includes digits, so this should be valid
     let result = InputParser.parse("#1password", testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({id})) => {
-        Assert.deepEqual(id, "1password")
+        t->expect(id)->Expect.toBe("1password")
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("rejects input with only underscores '#___'", () => {
+  test("rejects input with only underscores '#___'", t => {
     // This should actually be valid as underscores are word characters
     let result = InputParser.parse("#___", testPosition, testBounds)
 
     switch result {
     | Some(Types.Input({id})) => {
-        Assert.deepEqual(id, "___")
+        t->expect(id)->Expect.toBe("___")
       }
-    | _ => Assert.fail("Expected Input element")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input element
     }
   })
 
-  test("rejects multiple hashes '##email'", () => {
+  test("rejects multiple hashes '##email'", t => {
     let result = InputParser.parse("##email", testPosition, testBounds)
-    Assert.deepEqual(result, None)
+    t->expect(result)->Expect.toBe(None)
   })
 
-  test("rejects hash at end 'email#'", () => {
+  test("rejects hash at end 'email#'", t => {
     let result = InputParser.parse("email#", testPosition, testBounds)
-    Assert.deepEqual(result, None)
+    t->expect(result)->Expect.toBe(None)
   })
 })

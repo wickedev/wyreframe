@@ -1,6 +1,5 @@
 // AlignmentCalc.res
 // Alignment calculation module for determining element positioning within boxes
-// Task 28: Implement AlignmentCalc Module
 
 open Types
 

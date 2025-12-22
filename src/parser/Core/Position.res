@@ -44,3 +44,11 @@ let toString = (pos: t): string => {
 let fromUserCoords = (row: int, col: int): t => {
   {row: row - 1, col: col - 1}
 }
+
+// Check if position is within bounds (inclusive)
+let isWithin = (pos: t, bounds: Types.Bounds.t): bool => {
+  pos.row >= bounds.top &&
+  pos.row <= bounds.bottom &&
+  pos.col >= bounds.left &&
+  pos.col <= bounds.right
+}

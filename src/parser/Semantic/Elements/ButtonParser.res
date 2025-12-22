@@ -55,7 +55,7 @@ let quickTestPattern = %re("/\[.*\]/")
  * @return true if content looks like a button
  */
 let canParse = (content: string): bool => {
-  Js.Re.test_(quickTestPattern, content)
+  quickTestPattern->RegExp.test(content)
 }
 
 /**
@@ -86,8 +86,10 @@ let parse = (
       | Some(buttonText) => {
           let buttonText = buttonText->String.trim
 
-          // Return None for empty button text
-          if buttonText === "" {
+          // Return None for empty button text or single character 'x' (checkbox pattern)
+          // This allows [x] to be handled by CheckboxParser instead
+          let lowerText = buttonText->String.toLowerCase
+          if buttonText === "" || lowerText === "x" {
             None
           } else {
             let buttonId = slugify(buttonText)

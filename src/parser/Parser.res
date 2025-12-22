@@ -223,13 +223,17 @@ let parseSingleScene = (
       let semanticBoxes = shapes->Array.map(convertBox)
 
       // Parse each box recursively
+      // parseBoxRecursive returns a Box element with children inside
+      // Strategy:
+      // - Named boxes (e.g., "Login", "Level1") are semantically meaningful → keep them
+      // - Unnamed boxes are just visual containers → flatten to children only
+      // This prevents duplication: children are only inside the Box, NOT duplicated at scene level
       let elements = semanticBoxes->Array.flatMap(box => {
         let boxElement = SemanticParser.parseBoxRecursive(box, grid.cells, registry)
-
-        // Extract children from Box element
         switch boxElement {
-        | Box({children, _}) => children
-        | _ => [boxElement]
+        | Box({name: Some(_), _}) as namedBox => [namedBox]  // Keep named boxes
+        | Box({name: None, children, _}) => children         // Flatten unnamed boxes
+        | elem => [elem]
         }
       })
 
@@ -322,13 +326,17 @@ let parseInternal = (wireframe: string, interactions: option<string>): parseResu
     }
 
     // Return final result
-    // Only return Error if we have no scenes at all
-    // Otherwise return Ok even if there were some errors during parsing
-    if Array.length(finalAst.scenes) === 0 && Array.length(allErrors) > 0 {
-      // No scenes parsed and we have errors - return error
+    // Return Error if all boxes failed to parse and we have errors
+    // Return Ok if at least some elements were parsed successfully
+    let totalElements = finalAst.scenes->Array.reduce(0, (acc, scene) => {
+      acc + Array.length(scene.elements)
+    })
+
+    if Array.length(allErrors) > 0 && totalElements === 0 {
+      // No elements parsed and we have errors - return error
       Error(allErrors)
     } else {
-      // We have scenes - return Ok
+      // Either no errors, or some elements were parsed - return Ok
       Ok(finalAst)
     }
   }
@@ -408,12 +416,9 @@ let parseWireframe = (wireframe: string): parseResult => {
  * @returns Result containing scene interactions or array of parse errors
  *
  * REQ-21: Public API Stability
- * Task 50: Implement parseInteractions Helper
  */
 @genType
 let parseInteractions = (dsl: string): interactionResult => {
-  // TODO: Call InteractionParser.parse when Task 46 is complete
-  // Placeholder implementation
   parseInteractionsDSL(dsl)
 }
 
@@ -444,19 +449,6 @@ let mergeInteractions = (
 // ============================================================================
 // Helper Functions (Not exported to TypeScript)
 // ============================================================================
-
-/**
- * Execute the 3-stage parsing pipeline.
- * Internal helper that coordinates Grid Scanner, Shape Detector, and Semantic Parser.
- */
-let executePipeline = (_wireframe: string): parseResult => {
-  // TODO: Implement pipeline coordination
-  // 1. GridScanner.scan(wireframe)
-  // 2. ShapeDetector.detect(grid)
-  // 3. SemanticParser.parse(context)
-
-  Error([])
-}
 
 /**
  * Collect all errors from multiple parsing stages.

@@ -5,12 +5,11 @@
  * Tests validation, error detection, and successful merging of interactions.
  */
 
-open Jest
-open Expect
+open Vitest
 open Types
 open InteractionMerger
 
-describe("InteractionMerger", () => {
+describe("InteractionMerger", t => {
   // ============================================================================
   // Test Fixtures
   // ============================================================================
@@ -23,12 +22,14 @@ describe("InteractionMerger", () => {
     id: "login",
     title: "Login",
     transition: "fade",
+    device: Desktop,
     elements: [
       Button({
         id: "submit-btn",
         text: "Submit",
         position: makePosition(5, 10),
         align: Center,
+        actions: [],
       }),
       Input({
         id: "email",
@@ -43,6 +44,7 @@ describe("InteractionMerger", () => {
     id: "dashboard",
     title: "Dashboard",
     transition: "slide",
+    device: Desktop,
     elements: [
       Box({
         name: Some("Container"),
@@ -53,6 +55,7 @@ describe("InteractionMerger", () => {
             text: "Action",
             position: makePosition(2, 5),
             align: Left,
+            actions: [],
           }),
           Section({
             name: "settings",
@@ -62,6 +65,7 @@ describe("InteractionMerger", () => {
                 text: "Settings",
                 position: makePosition(4, 5),
                 align: Left,
+                actions: [],
               }),
             ],
           }),
@@ -88,7 +92,7 @@ describe("InteractionMerger", () => {
         },
         {
           elementId: "email",
-          properties: Js.Dict.fromArray([("required", Js.Json.bool(true))]),
+          properties: Dict.fromArray([("required", JSON.Encode.bool(true))]),
           actions: [],
         },
       ],
@@ -99,21 +103,22 @@ describe("InteractionMerger", () => {
   // Element ID Collection Tests
   // ============================================================================
 
-  describe("collectElementIds", () => {
-    test("collects ID from Button element", () => {
+  describe("collectElementIds", t => {
+    test("collects ID from Button element", t => {
       let button = Button({
         id: "test-btn",
         text: "Test",
         position: makePosition(0, 0),
         align: Left,
+        actions: [],
       })
 
       let ids = collectElementIds(button)
 
-      expect(ids->Belt.Set.String.has("test-btn"))->toBe(true)
+      t->expect(ids->Belt.Set.String.has("test-btn"))->Expect.toBe(true)
     })
 
-    test("collects ID from Input element", () => {
+    test("collects ID from Input element", t => {
       let input = Input({
         id: "test-input",
         placeholder: None,
@@ -122,23 +127,24 @@ describe("InteractionMerger", () => {
 
       let ids = collectElementIds(input)
 
-      expect(ids->Belt.Set.String.has("test-input"))->toBe(true)
+      t->expect(ids->Belt.Set.String.has("test-input"))->Expect.toBe(true)
     })
 
-    test("collects ID from Link element", () => {
+    test("collects ID from Link element", t => {
       let link = Link({
         id: "test-link",
         text: "Test Link",
         position: makePosition(0, 0),
         align: Left,
+        actions: [],
       })
 
       let ids = collectElementIds(link)
 
-      expect(ids->Belt.Set.String.has("test-link"))->toBe(true)
+      t->expect(ids->Belt.Set.String.has("test-link"))->Expect.toBe(true)
     })
 
-    test("collects name from Section element", () => {
+    test("collects name from Section element", t => {
       let section = Section({
         name: "test-section",
         children: [],
@@ -146,10 +152,10 @@ describe("InteractionMerger", () => {
 
       let ids = collectElementIds(section)
 
-      expect(ids->Belt.Set.String.has("test-section"))->toBe(true)
+      t->expect(ids->Belt.Set.String.has("test-section"))->Expect.toBe(true)
     })
 
-    test("returns empty set for elements without IDs", () => {
+    test("returns empty set for elements without IDs", t => {
       let checkbox = Checkbox({
         checked: true,
         label: "Test",
@@ -158,10 +164,10 @@ describe("InteractionMerger", () => {
 
       let ids = collectElementIds(checkbox)
 
-      expect(ids->Belt.Set.String.size)->toBe(0)
+      t->expect(ids->Belt.Set.String.size)->Expect.toBe(0)
     })
 
-    test("recursively collects IDs from Box children", () => {
+    test("recursively collects IDs from Box children", t => {
       let box = Box({
         name: Some("Container"),
         bounds: makeBounds(0, 0, 10, 10),
@@ -171,24 +177,26 @@ describe("InteractionMerger", () => {
             text: "Button 1",
             position: makePosition(2, 2),
             align: Left,
+            actions: [],
           }),
           Button({
             id: "btn2",
             text: "Button 2",
             position: makePosition(4, 2),
             align: Left,
+            actions: [],
           }),
         ],
       })
 
       let ids = collectElementIds(box)
 
-      expect(ids->Belt.Set.String.has("btn1"))->toBe(true)
-      expect(ids->Belt.Set.String.has("btn2"))->toBe(true)
-      expect(ids->Belt.Set.String.size)->toBe(2)
+      t->expect(ids->Belt.Set.String.has("btn1"))->Expect.toBe(true)
+      t->expect(ids->Belt.Set.String.has("btn2"))->Expect.toBe(true)
+      t->expect(ids->Belt.Set.String.size)->Expect.toBe(2)
     })
 
-    test("recursively collects IDs from nested Boxes", () => {
+    test("recursively collects IDs from nested Boxes", t => {
       let box = Box({
         name: Some("Outer"),
         bounds: makeBounds(0, 0, 20, 20),
@@ -209,10 +217,10 @@ describe("InteractionMerger", () => {
 
       let ids = collectElementIds(box)
 
-      expect(ids->Belt.Set.String.has("nested-input"))->toBe(true)
+      t->expect(ids->Belt.Set.String.has("nested-input"))->Expect.toBe(true)
     })
 
-    test("collects IDs from Row children", () => {
+    test("collects IDs from Row children", t => {
       let row = Row({
         children: [
           Button({
@@ -220,12 +228,14 @@ describe("InteractionMerger", () => {
             text: "Button 1",
             position: makePosition(0, 0),
             align: Left,
+            actions: [],
           }),
           Button({
             id: "row-btn2",
             text: "Button 2",
             position: makePosition(0, 10),
             align: Left,
+            actions: [],
           }),
         ],
         align: Center,
@@ -233,11 +243,11 @@ describe("InteractionMerger", () => {
 
       let ids = collectElementIds(row)
 
-      expect(ids->Belt.Set.String.has("row-btn1"))->toBe(true)
-      expect(ids->Belt.Set.String.has("row-btn2"))->toBe(true)
+      t->expect(ids->Belt.Set.String.has("row-btn1"))->Expect.toBe(true)
+      t->expect(ids->Belt.Set.String.has("row-btn2"))->Expect.toBe(true)
     })
 
-    test("collects IDs from Section and its children", () => {
+    test("collects IDs from Section and its children", t => {
       let section = Section({
         name: "my-section",
         children: [
@@ -246,58 +256,59 @@ describe("InteractionMerger", () => {
             text: "Link",
             position: makePosition(0, 0),
             align: Left,
+            actions: [],
           }),
         ],
       })
 
       let ids = collectElementIds(section)
 
-      expect(ids->Belt.Set.String.has("my-section"))->toBe(true)
-      expect(ids->Belt.Set.String.has("section-link"))->toBe(true)
+      t->expect(ids->Belt.Set.String.has("my-section"))->Expect.toBe(true)
+      t->expect(ids->Belt.Set.String.has("section-link"))->Expect.toBe(true)
     })
   })
 
-  describe("collectSceneElementIds", () => {
-    test("collects all element IDs from scene", () => {
+  describe("collectSceneElementIds", t => {
+    test("collects all element IDs from scene", t => {
       let ids = collectSceneElementIds(simpleScene)
 
-      expect(ids->Belt.Set.String.has("submit-btn"))->toBe(true)
-      expect(ids->Belt.Set.String.has("email"))->toBe(true)
-      expect(ids->Belt.Set.String.size)->toBe(2)
+      t->expect(ids->Belt.Set.String.has("submit-btn"))->Expect.toBe(true)
+      t->expect(ids->Belt.Set.String.has("email"))->Expect.toBe(true)
+      t->expect(ids->Belt.Set.String.size)->Expect.toBe(2)
     })
 
-    test("collects IDs from nested elements in scene", () => {
+    test("collects IDs from nested elements in scene", t => {
       let ids = collectSceneElementIds(nestedScene)
 
-      expect(ids->Belt.Set.String.has("action-btn"))->toBe(true)
-      expect(ids->Belt.Set.String.has("settings"))->toBe(true)
-      expect(ids->Belt.Set.String.has("settings-link"))->toBe(true)
-      expect(ids->Belt.Set.String.size)->toBe(3)
+      t->expect(ids->Belt.Set.String.has("action-btn"))->Expect.toBe(true)
+      t->expect(ids->Belt.Set.String.has("settings"))->Expect.toBe(true)
+      t->expect(ids->Belt.Set.String.has("settings-link"))->Expect.toBe(true)
+      t->expect(ids->Belt.Set.String.size)->Expect.toBe(3)
     })
   })
 
-  describe("buildSceneElementMap", () => {
-    test("builds map of scene IDs to element IDs", () => {
+  describe("buildSceneElementMap", t => {
+    test("builds map of scene IDs to element IDs", t => {
       let ast: ast = {
         scenes: [simpleScene, nestedScene],
       }
 
       let sceneMap = buildSceneElementMap(ast)
 
-      expect(sceneMap->Belt.Map.String.size)->toBe(2)
+      t->expect(sceneMap->Belt.Map.String.size)->Expect.toBe(2)
 
       let loginIds = sceneMap->Belt.Map.String.get("login")
-      expect(loginIds->Option.isSome)->toBe(true)
+      t->expect(loginIds->Option.isSome)->Expect.toBe(true)
       loginIds->Option.forEach(ids => {
-        expect(ids->Belt.Set.String.has("submit-btn"))->toBe(true)
-        expect(ids->Belt.Set.String.has("email"))->toBe(true)
+        t->expect(ids->Belt.Set.String.has("submit-btn"))->Expect.toBe(true)
+        t->expect(ids->Belt.Set.String.has("email"))->Expect.toBe(true)
       })
 
       let dashboardIds = sceneMap->Belt.Map.String.get("dashboard")
-      expect(dashboardIds->Option.isSome)->toBe(true)
+      t->expect(dashboardIds->Option.isSome)->Expect.toBe(true)
       dashboardIds->Option.forEach(ids => {
-        expect(ids->Belt.Set.String.has("action-btn"))->toBe(true)
-        expect(ids->Belt.Set.String.has("settings-link"))->toBe(true)
+        t->expect(ids->Belt.Set.String.has("action-btn"))->Expect.toBe(true)
+        t->expect(ids->Belt.Set.String.has("settings-link"))->Expect.toBe(true)
       })
     })
   })
@@ -306,17 +317,17 @@ describe("InteractionMerger", () => {
   // Validation Tests
   // ============================================================================
 
-  describe("validateInteractions", () => {
-    test("returns no errors for valid interactions", () => {
+  describe("validateInteractions", t => {
+    test("returns no errors for valid interactions", t => {
       let ast: ast = {scenes: [simpleScene]}
       let sceneMap = buildSceneElementMap(ast)
 
       let errors = validateInteractions(validInteractions, sceneMap)
 
-      expect(errors->Array.length)->toBe(0)
+      t->expect(errors->Array.length)->Expect.toBe(0)
     })
 
-    test("detects missing element", () => {
+    test("detects missing element", t => {
       let ast: ast = {scenes: [simpleScene]}
       let sceneMap = buildSceneElementMap(ast)
 
@@ -335,14 +346,14 @@ describe("InteractionMerger", () => {
 
       let errors = validateInteractions(invalidInteractions, sceneMap)
 
-      expect(errors->Array.length)->toBe(1)
+      t->expect(errors->Array.length)->Expect.toBe(1)
       switch errors[0] {
-      | Some(ElementNotFound({elementId})) => expect(elementId)->toBe("nonexistent-btn")
-      | _ => fail("Expected ElementNotFound error")
+      | Some(ElementNotFound({elementId})) => t->expect(elementId)->Expect.toBe("nonexistent-btn")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected ElementNotFound error
       }
     })
 
-    test("detects missing scene", () => {
+    test("detects missing scene", t => {
       let ast: ast = {scenes: [simpleScene]}
       let sceneMap = buildSceneElementMap(ast)
 
@@ -361,14 +372,14 @@ describe("InteractionMerger", () => {
 
       let errors = validateInteractions(invalidInteractions, sceneMap)
 
-      expect(errors->Array.length)->toBe(1)
+      t->expect(errors->Array.length)->Expect.toBe(1)
       switch errors[0] {
-      | Some(SceneNotFound({sceneId})) => expect(sceneId)->toBe("nonexistent-scene")
-      | _ => fail("Expected SceneNotFound error")
+      | Some(SceneNotFound({sceneId})) => t->expect(sceneId)->Expect.toBe("nonexistent-scene")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected SceneNotFound error
       }
     })
 
-    test("detects duplicate interaction for same element", () => {
+    test("detects duplicate interaction for same element", t => {
       let ast: ast = {scenes: [simpleScene]}
       let sceneMap = buildSceneElementMap(ast)
 
@@ -392,14 +403,14 @@ describe("InteractionMerger", () => {
 
       let errors = validateInteractions(duplicateInteractions, sceneMap)
 
-      expect(errors->Array.length)->toBe(1)
+      t->expect(errors->Array.length)->Expect.toBe(1)
       switch errors[0] {
-      | Some(DuplicateInteraction({elementId})) => expect(elementId)->toBe("submit-btn")
-      | _ => fail("Expected DuplicateInteraction error")
+      | Some(DuplicateInteraction({elementId})) => t->expect(elementId)->Expect.toBe("submit-btn")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected DuplicateInteraction error
       }
     })
 
-    test("reports multiple errors", () => {
+    test("reports multiple errors", t => {
       let ast: ast = {scenes: [simpleScene]}
       let sceneMap = buildSceneElementMap(ast)
 
@@ -423,7 +434,7 @@ describe("InteractionMerger", () => {
 
       let errors = validateInteractions(multiErrorInteractions, sceneMap)
 
-      expect(errors->Array.length)->toBe(2)
+      t->expect(errors->Array.length)->Expect.toBe(2)
     })
   })
 
@@ -431,27 +442,28 @@ describe("InteractionMerger", () => {
   // Merge Function Tests
   // ============================================================================
 
-  describe("mergeInteractions", () => {
-    test("successfully merges valid interactions", () => {
+  describe("mergeInteractions", t => {
+    test("successfully merges valid interactions", t => {
       let ast: ast = {scenes: [simpleScene]}
 
       let result = mergeInteractions(ast, validInteractions)
 
-      expect(result->Result.isOk)->toBe(true)
+      t->expect(result->Result.isOk)->Expect.toBe(true)
       result->Result.forEach(mergedAst => {
-        expect(mergedAst.scenes->Array.length)->toBe(1)
+        t->expect(mergedAst.scenes->Array.length)->Expect.toBe(1)
       })
     })
 
-    test("returns error for invalid interactions", () => {
+    test("returns error for invalid interactions (hard errors)", t => {
       let ast: ast = {scenes: [simpleScene]}
 
+      // SceneNotFound is a hard error (unlike ElementNotFound which is soft)
       let invalidInteractions = [
         {
-          sceneId: "login",
+          sceneId: "nonexistent-scene", // This scene doesn't exist
           interactions: [
             {
-              elementId: "nonexistent-btn",
+              elementId: "some-btn",
               properties: Js.Dict.empty(),
               actions: [],
             },
@@ -461,25 +473,26 @@ describe("InteractionMerger", () => {
 
       let result = mergeInteractions(ast, invalidInteractions)
 
-      expect(result->Result.isError)->toBe(true)
-      result->Result.getError->Option.forEach(errors => {
-        expect(errors->Array.length)->toBeGreaterThan(0)
-      })
+      t->expect(result->Result.isError)->Expect.toBe(true)
+      switch result {
+      | Error(errors) => t->expect(errors->Array.length)->Expect.Int.toBeGreaterThan(0)
+      | Ok(_) => t->expect(true)->Expect.toBe(false) // fail: Expected error result
+      }
     })
 
-    test("preserves scene structure after merge", () => {
+    test("preserves scene structure after merge", t => {
       let ast: ast = {scenes: [simpleScene]}
 
       let result = mergeInteractions(ast, validInteractions)
 
       result->Result.forEach(mergedAst => {
-        expect(mergedAst.scenes[0]->Option.map(s => s.id))->toEqual(Some("login"))
-        expect(mergedAst.scenes[0]->Option.map(s => s.title))->toEqual(Some("Login"))
-        expect(mergedAst.scenes[0]->Option.map(s => s.elements->Array.length))->toEqual(Some(2))
+        t->expect(mergedAst.scenes[0]->Option.map(s => s.id))->Expect.toEqual(Some("login"))
+        t->expect(mergedAst.scenes[0]->Option.map(s => s.title))->Expect.toEqual(Some("Login"))
+        t->expect(mergedAst.scenes[0]->Option.map(s => s.elements->Array.length))->Expect.toEqual(Some(2))
       })
     })
 
-    test("handles multiple scenes with interactions", () => {
+    test("handles multiple scenes with interactions", t => {
       let ast: ast = {scenes: [simpleScene, nestedScene]}
 
       let multiSceneInteractions = [
@@ -507,18 +520,18 @@ describe("InteractionMerger", () => {
 
       let result = mergeInteractions(ast, multiSceneInteractions)
 
-      expect(result->Result.isOk)->toBe(true)
+      t->expect(result->Result.isOk)->Expect.toBe(true)
       result->Result.forEach(mergedAst => {
-        expect(mergedAst.scenes->Array.length)->toBe(2)
+        t->expect(mergedAst.scenes->Array.length)->Expect.toBe(2)
       })
     })
 
-    test("merges empty interactions successfully", () => {
+    test("merges empty interactions successfully", t => {
       let ast: ast = {scenes: [simpleScene]}
 
       let result = mergeInteractions(ast, [])
 
-      expect(result->Result.isOk)->toBe(true)
+      t->expect(result->Result.isOk)->Expect.toBe(true)
     })
   })
 
@@ -526,8 +539,8 @@ describe("InteractionMerger", () => {
   // Error Formatting Tests
   // ============================================================================
 
-  describe("formatError", () => {
-    test("formats ElementNotFound error", () => {
+  describe("formatError", t => {
+    test("formats ElementNotFound error", t => {
       let error = ElementNotFound({
         sceneId: "login",
         elementId: "missing-btn",
@@ -536,11 +549,11 @@ describe("InteractionMerger", () => {
 
       let message = formatError(error)
 
-      expect(message)->toContain("missing-btn")
-      expect(message)->toContain("login")
+      t->expect(message)->Expect.String.toContain("missing-btn")
+      t->expect(message)->Expect.String.toContain("login")
     })
 
-    test("formats DuplicateInteraction error", () => {
+    test("formats DuplicateInteraction error", t => {
       let error = DuplicateInteraction({
         sceneId: "login",
         elementId: "duplicate-btn",
@@ -548,22 +561,22 @@ describe("InteractionMerger", () => {
 
       let message = formatError(error)
 
-      expect(message)->toContain("duplicate-btn")
-      expect(message)->toContain("Duplicate")
+      t->expect(message)->Expect.String.toContain("duplicate-btn")
+      t->expect(message)->Expect.String.toContain("Duplicate")
     })
 
-    test("formats SceneNotFound error", () => {
+    test("formats SceneNotFound error", t => {
       let error = SceneNotFound({sceneId: "missing-scene"})
 
       let message = formatError(error)
 
-      expect(message)->toContain("missing-scene")
-      expect(message)->toContain("not found")
+      t->expect(message)->Expect.String.toContain("missing-scene")
+      t->expect(message)->Expect.String.toContain("not found")
     })
   })
 
-  describe("formatErrors", () => {
-    test("formats multiple errors with newlines", () => {
+  describe("formatErrors", t => {
+    test("formats multiple errors with newlines", t => {
       let errors = [
         ElementNotFound({
           sceneId: "login",
@@ -579,9 +592,9 @@ describe("InteractionMerger", () => {
 
       let message = formatErrors(errors)
 
-      expect(message)->toContain("btn1")
-      expect(message)->toContain("btn2")
-      expect(message)->toContain("\n")
+      t->expect(message)->Expect.String.toContain("btn1")
+      t->expect(message)->Expect.String.toContain("btn2")
+      t->expect(message)->Expect.String.toContain("\n")
     })
   })
 
@@ -589,8 +602,8 @@ describe("InteractionMerger", () => {
   // findInteractionForElement Tests
   // ============================================================================
 
-  describe("findInteractionForElement", () => {
-    test("finds interaction for element", () => {
+  describe("findInteractionForElement", t => {
+    test("finds interaction for element", t => {
       let sceneInteractions = Some({
         sceneId: "login",
         interactions: [
@@ -604,10 +617,10 @@ describe("InteractionMerger", () => {
 
       let result = findInteractionForElement("test-btn", sceneInteractions)
 
-      expect(result->Option.isSome)->toBe(true)
+      t->expect(result->Option.isSome)->Expect.toBe(true)
     })
 
-    test("returns None when element not found", () => {
+    test("returns None when element not found", t => {
       let sceneInteractions = Some({
         sceneId: "login",
         interactions: [
@@ -621,13 +634,13 @@ describe("InteractionMerger", () => {
 
       let result = findInteractionForElement("other-btn", sceneInteractions)
 
-      expect(result->Option.isNone)->toBe(true)
+      t->expect(result->Option.isNone)->Expect.toBe(true)
     })
 
-    test("returns None when no scene interactions", () => {
+    test("returns None when no scene interactions", t => {
       let result = findInteractionForElement("test-btn", None)
 
-      expect(result->Option.isNone)->toBe(true)
+      t->expect(result->Option.isNone)->Expect.toBe(true)
     })
   })
 })

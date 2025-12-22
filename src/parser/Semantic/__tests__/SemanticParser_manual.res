@@ -1,5 +1,5 @@
 // SemanticParser_test.res
-// Unit tests for SemanticParser - Box Content Extraction (Task 30)
+// Unit tests for SemanticParser - Box Content Extraction
 
 open Types
 
@@ -26,11 +26,11 @@ let test_extractContentLines_simpleBox = () => {
   ])
 
   let box = makeTestBox(0, 0, 2, 8)
-  let content = SemanticParser.extractContentLines(box, grid)
+  let content = SemanticParser.extractContentLines(box, grid.cells)
 
   // Should extract: [" Hello "]
   assert(Array.length(content) === 1)
-  assert(content[0] === " Hello ")
+  assert(Array.getUnsafe(content, 0) === " Hello ")
 }
 
 // Test 2: Extract content from box with multiple lines
@@ -43,12 +43,12 @@ let test_extractContentLines_multipleLines = () => {
   ])
 
   let box = makeTestBox(0, 0, 3, 10)
-  let content = SemanticParser.extractContentLines(box, grid)
+  let content = SemanticParser.extractContentLines(box, grid.cells)
 
   // Should extract: ["  #email ", " [Submit]"]
   assert(Array.length(content) === 2)
-  assert(content[0] === "  #email ")
-  assert(content[1] === " [Submit]")
+  assert(Array.getUnsafe(content, 0) === "  #email ")
+  assert(Array.getUnsafe(content, 1) === " [Submit]")
 }
 
 // Test 3: Extract content preserving internal whitespace
@@ -60,11 +60,11 @@ let test_extractContentLines_preserveWhitespace = () => {
   ])
 
   let box = makeTestBox(0, 0, 2, 10)
-  let content = SemanticParser.extractContentLines(box, grid)
+  let content = SemanticParser.extractContentLines(box, grid.cells)
 
   // Should preserve the exact spacing: "  a   b  "
   assert(Array.length(content) === 1)
-  assert(content[0] === "  a   b  ")
+  assert(Array.getUnsafe(content, 0) === "  a   b  ")
 }
 
 // Test 4: Empty box (no content area)
@@ -75,7 +75,7 @@ let test_extractContentLines_emptyBox = () => {
   ])
 
   let box = makeTestBox(0, 0, 1, 4)
-  let content = SemanticParser.extractContentLines(box, grid)
+  let content = SemanticParser.extractContentLines(box, grid.cells)
 
   // Should return empty array for box with no content area
   assert(Array.length(content) === 0)
@@ -92,13 +92,13 @@ let test_extractContentLines_withDivider = () => {
   ])
 
   let box = makeTestBox(0, 0, 4, 7)
-  let content = SemanticParser.extractContentLines(box, grid)
+  let content = SemanticParser.extractContentLines(box, grid.cells)
 
   // Should extract all lines including divider
   assert(Array.length(content) === 3)
-  assert(content[0] === " Head ")
-  assert(content[1] === "======")
-  assert(content[2] === " Body ")
+  assert(Array.getUnsafe(content, 0) === " Head ")
+  assert(Array.getUnsafe(content, 1) === "======")
+  assert(Array.getUnsafe(content, 2) === " Body ")
 }
 
 // Test 6: Box with empty lines
@@ -112,13 +112,13 @@ let test_extractContentLines_withEmptyLines = () => {
   ])
 
   let box = makeTestBox(0, 0, 4, 6)
-  let content = SemanticParser.extractContentLines(box, grid)
+  let content = SemanticParser.extractContentLines(box, grid.cells)
 
   // Should extract all lines, empty line as spaces
   assert(Array.length(content) === 3)
-  assert(content[0] === " Top ")
-  assert(content[1] === "     ")
-  assert(content[2] === " Bot ")
+  assert(Array.getUnsafe(content, 0) === " Top ")
+  assert(Array.getUnsafe(content, 1) === "     ")
+  assert(Array.getUnsafe(content, 2) === " Bot ")
 }
 
 // Test 7: Nested box scenario (inner box content)
@@ -133,19 +133,19 @@ let test_extractContentLines_nestedBox = () => {
 
   // Extract inner box content
   let innerBox = makeTestBox(1, 2, 3, 9)
-  let innerContent = SemanticParser.extractContentLines(innerBox, grid)
+  let innerContent = SemanticParser.extractContentLines(innerBox, grid.cells)
 
   // Should extract: [" Inner "]
   assert(Array.length(innerContent) === 1)
-  assert(innerContent[0] === " Inner ")
+  assert(Array.getUnsafe(innerContent, 0) === " Inner ")
 
   // Extract outer box content (includes inner box structure)
   let outerBox = makeTestBox(0, 0, 4, 12)
-  let outerContent = SemanticParser.extractContentLines(outerBox, grid)
+  let outerContent = SemanticParser.extractContentLines(outerBox, grid.cells)
 
   // Should extract outer content with inner box visible
   assert(Array.length(outerContent) === 3)
-  assert(String.includes(outerContent[0], "+-------+"))
+  assert(String.includes(Array.getUnsafe(outerContent, 0), "+-------+"))
 }
 
 // Test 8: Box with special characters in content
@@ -157,11 +157,11 @@ let test_extractContentLines_specialChars = () => {
   ])
 
   let box = makeTestBox(0, 0, 2, 9)
-  let content = SemanticParser.extractContentLines(box, grid)
+  let content = SemanticParser.extractContentLines(box, grid.cells)
 
   // Should preserve special chars that appear in content
   assert(Array.length(content) === 1)
-  assert(content[0] === " a|b-c+ ")
+  assert(Array.getUnsafe(content, 0) === " a|b-c+ ")
 }
 
 // Test utility functions
@@ -205,7 +205,7 @@ let test_getContentLineCount = () => {
 }
 
 // ============================================================================
-// Task 32: Scene Directive Parsing Tests
+// Scene Directive Parsing Tests
 // ============================================================================
 
 // Test: parseSceneDirectives with @scene
@@ -455,7 +455,7 @@ let test_groupContentByScenes_complex = () => {
 // Run all tests
 let runTests = () => {
   Console.log("Running SemanticParser tests...")
-  Console.log("\n=== Task 30: Box Content Extraction ===")
+  Console.log("\n=== Box Content Extraction ===")
 
   test_extractContentLines_simpleBox()
   Console.log("✓ Simple box content extraction")
@@ -490,7 +490,7 @@ let runTests = () => {
   test_getContentLineCount()
   Console.log("✓ getContentLineCount")
 
-  Console.log("\n=== Task 32: Scene Directive Parsing ===")
+  Console.log("\n=== Scene Directive Parsing ===")
 
   test_parseSceneDirectives_scene()
   Console.log("✓ Parse @scene directive")

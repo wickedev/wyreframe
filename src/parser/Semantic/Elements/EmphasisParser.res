@@ -1,8 +1,7 @@
 // EmphasisParser.res
+// Parser for emphasis text syntax: * Text
 
 open Types
-// Parser for emphasis text syntax: * Text
-// Task 25: Implement EmphasisParser
 
 /**
  * Emphasis pattern regex: ^\s*\*\s+(.+)

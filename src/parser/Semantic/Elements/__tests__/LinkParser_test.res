@@ -7,12 +7,11 @@
 // - Empty link text
 // - Edge cases and boundary conditions
 
-open Jest
-open Expect
+open Vitest
 
 describe("LinkParser", () => {
-  let testPosition = Position.make(5, 10)
-  let testBounds: Types.bounds = {
+  let testPosition = Types.Position.make(5, 10)
+  let testBounds: Types.Bounds.t = {
     top: 0,
     left: 0,
     bottom: 10,
@@ -20,383 +19,383 @@ describe("LinkParser", () => {
   }
 
   describe("canParse", () => {
-    test("returns true for valid quoted text", () => {
-      expect(LinkParser.canParse("\"Login\"))->toBe(true)
+    test("returns true for valid quoted text", t => {
+      t->expect(LinkParser.canParse("\"Login\""))->Expect.toBe(true)
     })
 
-    test("returns true for quoted text with spaces", () => {
-      expect(LinkParser.canParse("\"Sign Up Here\""))->toBe(true)
+    test("returns true for quoted text with spaces", t => {
+      t->expect(LinkParser.canParse("\"Sign Up Here\""))->Expect.toBe(true)
     })
 
-    test("returns true for quoted text with numbers", () => {
-      expect(LinkParser.canParse("\"Page 123\""))->toBe(true)
+    test("returns true for quoted text with numbers", t => {
+      t->expect(LinkParser.canParse("\"Page 123\""))->Expect.toBe(true)
     })
 
-    test("returns true for quoted text with special characters", () => {
-      expect(LinkParser.canParse("\"Home - Main Page\""))->toBe(true)
+    test("returns true for quoted text with special characters", t => {
+      t->expect(LinkParser.canParse("\"Home - Main Page\""))->Expect.toBe(true)
     })
 
-    test("returns false for text without quotes", () => {
-      expect(LinkParser.canParse("Login"))->toBe(false)
+    test("returns false for text without quotes", t => {
+      t->expect(LinkParser.canParse("Login"))->Expect.toBe(false)
     })
 
-    test("returns false for text with only opening quote", () => {
-      expect(LinkParser.canParse("\"Login"))->toBe(false)
+    test("returns false for text with only opening quote", t => {
+      t->expect(LinkParser.canParse("\"Login"))->Expect.toBe(false)
     })
 
-    test("returns false for text with only closing quote", () => {
-      expect(LinkParser.canParse("Login\""))->toBe(false)
+    test("returns false for text with only closing quote", t => {
+      t->expect(LinkParser.canParse("Login\""))->Expect.toBe(false)
     })
 
-    test("returns false for empty quotes", () => {
-      expect(LinkParser.canParse("\"\""))->toBe(false)
+    test("returns false for empty quotes", t => {
+      t->expect(LinkParser.canParse("\"\""))->Expect.toBe(false)
     })
 
-    test("returns false for button syntax", () => {
-      expect(LinkParser.canParse("[ Submit ]"))->toBe(false)
+    test("returns false for button syntax", t => {
+      t->expect(LinkParser.canParse("[ Submit ]"))->Expect.toBe(false)
     })
 
-    test("returns false for input syntax", () => {
-      expect(LinkParser.canParse("#username"))->toBe(false)
+    test("returns false for input syntax", t => {
+      t->expect(LinkParser.canParse("#username"))->Expect.toBe(false)
     })
   })
 
   describe("parse", () => {
     describe("valid links", () => {
-      test("parses simple quoted text", () => {
+      test("parses simple quoted text", t => {
         let result = LinkParser.parse("\"Login\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id, text, position, align})) => {
-            expect(id)->toBe("login")
-            expect(text)->toBe("Login")
-            expect(position)->toEqual(testPosition)
-            expect(align)->toBe(Types.Left)
+            t->expect(id)->Expect.toBe("login")
+            t->expect(text)->Expect.toBe("Login")
+            t->expect(position)->Expect.toEqual(testPosition)
+            t->expect(align)->Expect.toBe(Types.Left)
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("parses quoted text with spaces", () => {
+      test("parses quoted text with spaces", t => {
         let result = LinkParser.parse("\"Sign Up Here\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id, text})) => {
-            expect(id)->toBe("sign-up-here")
-            expect(text)->toBe("Sign Up Here")
+            t->expect(id)->Expect.toBe("sign-up-here")
+            t->expect(text)->Expect.toBe("Sign Up Here")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("parses quoted text with numbers", () => {
+      test("parses quoted text with numbers", t => {
         let result = LinkParser.parse("\"Page 123\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id, text})) => {
-            expect(id)->toBe("page-123")
-            expect(text)->toBe("Page 123")
+            t->expect(id)->Expect.toBe("page-123")
+            t->expect(text)->Expect.toBe("Page 123")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("parses quoted text with hyphens", () => {
+      test("parses quoted text with hyphens", t => {
         let result = LinkParser.parse("\"Home-Page\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id, text})) => {
-            expect(id)->toBe("home-page")
-            expect(text)->toBe("Home-Page")
+            t->expect(id)->Expect.toBe("home-page")
+            t->expect(text)->Expect.toBe("Home-Page")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("parses quoted text with special characters", () => {
+      test("parses quoted text with special characters", t => {
         let result = LinkParser.parse("\"Contact Us!\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id, text})) => {
-            expect(id)->toBe("contact-us")
-            expect(text)->toBe("Contact Us!")
+            t->expect(id)->Expect.toBe("contact-us")
+            t->expect(text)->Expect.toBe("Contact Us!")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("parses quoted text with multiple words", () => {
+      test("parses quoted text with multiple words", t => {
         let result = LinkParser.parse("\"Learn More About Our Services\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id, text})) => {
-            expect(id)->toBe("learn-more-about-our-services")
-            expect(text)->toBe("Learn More About Our Services")
+            t->expect(id)->Expect.toBe("learn-more-about-our-services")
+            t->expect(text)->Expect.toBe("Learn More About Our Services")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("parses link in context with surrounding text", () => {
+      test("parses link in context with surrounding text", t => {
         let result = LinkParser.parse("Click \"Here\" to continue", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id, text})) => {
-            expect(id)->toBe("here")
-            expect(text)->toBe("Here")
+            t->expect(id)->Expect.toBe("here")
+            t->expect(text)->Expect.toBe("Here")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
     })
 
     describe("escaped quotes", () => {
-      test("handles escaped quotes within link text", () => {
+      test("handles escaped quotes within link text", t => {
         let result = LinkParser.parse("\"Say \\\"Hello\\\"\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({text})) => {
-            expect(text)->toBe("Say \"Hello\"")
+            t->expect(text)->Expect.toBe("Say \"Hello\"")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("handles multiple escaped quotes", () => {
+      test("handles multiple escaped quotes", t => {
         let result = LinkParser.parse("\"\\\"Quote\\\" and \\\"Unquote\\\"\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({text})) => {
-            expect(text)->toBe("\"Quote\" and \"Unquote\"")
+            t->expect(text)->Expect.toBe("\"Quote\" and \"Unquote\"")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
     })
 
     describe("empty and whitespace text", () => {
-      test("returns None for empty quotes", () => {
+      test("returns None for empty quotes", t => {
         let result = LinkParser.parse("\"\"", testPosition, testBounds)
-        expect(result)->toBe(None)
+        t->expect(result)->Expect.toBe(None)
       })
 
-      test("returns None for quotes with only whitespace", () => {
+      test("returns None for quotes with only whitespace", t => {
         let result = LinkParser.parse("\"   \"", testPosition, testBounds)
-        expect(result)->toBe(None)
+        t->expect(result)->Expect.toBe(None)
       })
 
-      test("returns None for quotes with only tabs", () => {
+      test("returns None for quotes with only tabs", t => {
         let result = LinkParser.parse("\"\t\t\"", testPosition, testBounds)
-        expect(result)->toBe(None)
+        t->expect(result)->Expect.toBe(None)
       })
 
-      test("returns None for quotes with only newlines", () => {
+      test("returns None for quotes with only newlines", t => {
         let result = LinkParser.parse("\"\n\n\"", testPosition, testBounds)
-        expect(result)->toBe(None)
+        t->expect(result)->Expect.toBe(None)
       })
     })
 
     describe("invalid patterns", () => {
-      test("returns None for text without quotes", () => {
+      test("returns None for text without quotes", t => {
         let result = LinkParser.parse("Login", testPosition, testBounds)
-        expect(result)->toBe(None)
+        t->expect(result)->Expect.toBe(None)
       })
 
-      test("returns None for text with only opening quote", () => {
+      test("returns None for text with only opening quote", t => {
         let result = LinkParser.parse("\"Login", testPosition, testBounds)
-        expect(result)->toBe(None)
+        t->expect(result)->Expect.toBe(None)
       })
 
-      test("returns None for text with only closing quote", () => {
+      test("returns None for text with only closing quote", t => {
         let result = LinkParser.parse("Login\"", testPosition, testBounds)
-        expect(result)->toBe(None)
+        t->expect(result)->Expect.toBe(None)
       })
 
-      test("returns None for button syntax", () => {
+      test("returns None for button syntax", t => {
         let result = LinkParser.parse("[ Submit ]", testPosition, testBounds)
-        expect(result)->toBe(None)
+        t->expect(result)->Expect.toBe(None)
       })
 
-      test("returns None for input syntax", () => {
+      test("returns None for input syntax", t => {
         let result = LinkParser.parse("#username", testPosition, testBounds)
-        expect(result)->toBe(None)
+        t->expect(result)->Expect.toBe(None)
       })
     })
 
     describe("edge cases", () => {
-      test("handles single character link", () => {
+      test("handles single character link", t => {
         let result = LinkParser.parse("\"A\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id, text})) => {
-            expect(id)->toBe("a")
-            expect(text)->toBe("A")
+            t->expect(id)->Expect.toBe("a")
+            t->expect(text)->Expect.toBe("A")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("handles very long link text", () => {
+      test("handles very long link text", t => {
         let longText = "This is a very long link text that spans multiple words and contains various characters"
         let result = LinkParser.parse(`"${longText}"`, testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({text})) => {
-            expect(text)->toBe(longText)
+            t->expect(text)->Expect.toBe(longText)
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("preserves case in link text", () => {
+      test("preserves case in link text", t => {
         let result = LinkParser.parse("\"CamelCaseLink\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({text})) => {
-            expect(text)->toBe("CamelCaseLink")
+            t->expect(text)->Expect.toBe("CamelCaseLink")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("converts uppercase to lowercase in ID", () => {
+      test("converts uppercase to lowercase in ID", t => {
         let result = LinkParser.parse("\"UPPERCASE LINK\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id})) => {
-            expect(id)->toBe("uppercase-link")
+            t->expect(id)->Expect.toBe("uppercase-link")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
 
-      test("handles consecutive spaces in ID generation", () => {
+      test("handles consecutive spaces in ID generation", t => {
         let result = LinkParser.parse("\"Multiple   Spaces\"", testPosition, testBounds)
 
         switch result {
         | Some(Types.Link({id})) => {
-            expect(id)->toBe("multiple-spaces")
+            t->expect(id)->Expect.toBe("multiple-spaces")
           }
-        | _ => fail("Expected Link element")
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
         }
       })
     })
   })
 
   describe("slugify", () => {
-    test("converts text to lowercase", () => {
-      expect(LinkParser.slugify("HELLO WORLD"))->toBe("hello-world")
+    test("converts text to lowercase", t => {
+      t->expect(LinkParser.slugify("HELLO WORLD"))->Expect.toBe("hello-world")
     })
 
-    test("replaces spaces with hyphens", () => {
-      expect(LinkParser.slugify("hello world"))->toBe("hello-world")
+    test("replaces spaces with hyphens", t => {
+      t->expect(LinkParser.slugify("hello world"))->Expect.toBe("hello-world")
     })
 
-    test("removes special characters", () => {
-      expect(LinkParser.slugify("hello! world?"))->toBe("hello-world")
+    test("removes special characters", t => {
+      t->expect(LinkParser.slugify("hello! world?"))->Expect.toBe("hello-world")
     })
 
-    test("removes consecutive hyphens", () => {
-      expect(LinkParser.slugify("hello---world"))->toBe("hello-world")
+    test("removes consecutive hyphens", t => {
+      t->expect(LinkParser.slugify("hello---world"))->Expect.toBe("hello-world")
     })
 
-    test("trims leading and trailing hyphens", () => {
-      expect(LinkParser.slugify("-hello-world-"))->toBe("hello-world")
+    test("trims leading and trailing hyphens", t => {
+      t->expect(LinkParser.slugify("-hello-world-"))->Expect.toBe("hello-world")
     })
 
-    test("handles empty string", () => {
-      expect(LinkParser.slugify(""))->toBe("")
+    test("handles empty string", t => {
+      t->expect(LinkParser.slugify(""))->Expect.toBe("")
     })
 
-    test("handles only special characters", () => {
-      expect(LinkParser.slugify("!!!###"))->toBe("")
+    test("handles only special characters", t => {
+      t->expect(LinkParser.slugify("!!!###"))->Expect.toBe("")
     })
 
-    test("preserves numbers", () => {
-      expect(LinkParser.slugify("Page 123"))->toBe("page-123")
+    test("preserves numbers", t => {
+      t->expect(LinkParser.slugify("Page 123"))->Expect.toBe("page-123")
     })
 
-    test("handles mixed alphanumeric", () => {
-      expect(LinkParser.slugify("Test123Page"))->toBe("test123page")
+    test("handles mixed alphanumeric", t => {
+      t->expect(LinkParser.slugify("Test123Page"))->Expect.toBe("test123page")
     })
   })
 
   describe("unescapeQuotes", () => {
-    test("unescapes escaped quotes", () => {
-      expect(LinkParser.unescapeQuotes("Say \\\"Hello\\\""))->toBe("Say \"Hello\"")
+    test("unescapes escaped quotes", t => {
+      t->expect(LinkParser.unescapeQuotes("Say \\\"Hello\\\""))->Expect.toBe("Say \"Hello\"")
     })
 
-    test("handles multiple escaped quotes", () => {
-      expect(LinkParser.unescapeQuotes("\\\"A\\\" and \\\"B\\\""))->toBe("\"A\" and \"B\"")
+    test("handles multiple escaped quotes", t => {
+      t->expect(LinkParser.unescapeQuotes("\\\"A\\\" and \\\"B\\\""))->Expect.toBe("\"A\" and \"B\"")
     })
 
-    test("returns unchanged text without escaped quotes", () => {
-      expect(LinkParser.unescapeQuotes("Hello World"))->toBe("Hello World")
+    test("returns unchanged text without escaped quotes", t => {
+      t->expect(LinkParser.unescapeQuotes("Hello World"))->Expect.toBe("Hello World")
     })
 
-    test("handles empty string", () => {
-      expect(LinkParser.unescapeQuotes(""))->toBe("")
+    test("handles empty string", t => {
+      t->expect(LinkParser.unescapeQuotes(""))->Expect.toBe("")
     })
   })
 
   describe("make", () => {
-    test("creates parser with priority 80", () => {
+    test("creates parser with priority 80", t => {
       let parser = LinkParser.make()
-      expect(parser.priority)->toBe(80)
+      t->expect(parser.priority)->Expect.toBe(80)
     })
 
-    test("creates parser with canParse function", () => {
+    test("creates parser with canParse function", t => {
       let parser = LinkParser.make()
-      expect(parser.canParse("\"Link\""))->toBe(true)
+      t->expect(parser.canParse("\"Link\""))->Expect.toBe(true)
     })
 
-    test("creates parser with parse function", () => {
+    test("creates parser with parse function", t => {
       let parser = LinkParser.make()
       let result = parser.parse("\"Link\"", testPosition, testBounds)
 
       switch result {
-      | Some(Types.Link(_)) => pass
-      | _ => fail("Expected Link element")
+      | Some(Types.Link(_)) => ()
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
       }
     })
   })
 
   describe("integration", () => {
-    test("parses link within box content", () => {
+    test("parses link within box content", t => {
       // Simulating link within a box: "Click \"here\" for details"
       let result = LinkParser.parse("Click \"here\" for details", testPosition, testBounds)
 
       switch result {
       | Some(Types.Link({id, text, position})) => {
-          expect(id)->toBe("here")
-          expect(text)->toBe("here")
-          expect(position.row)->toBe(5)
-          expect(position.col)->toBe(10)
+          t->expect(id)->Expect.toBe("here")
+          t->expect(text)->Expect.toBe("here")
+          t->expect(position.row)->Expect.toBe(5)
+          t->expect(position.col)->Expect.toBe(10)
         }
-      | _ => fail("Expected Link element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
       }
     })
 
-    test("distinguishes link from button syntax", () => {
+    test("distinguishes link from button syntax", t => {
       let linkResult = LinkParser.parse("\"Submit\"", testPosition, testBounds)
       let buttonResult = LinkParser.parse("[ Submit ]", testPosition, testBounds)
 
       switch (linkResult, buttonResult) {
-      | (Some(Types.Link(_)), None) => pass
-      | _ => fail("Link parser should match quoted text but not button syntax")
+      | (Some(Types.Link(_)), None) => ()
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Link parser should match quoted text but not button syntax
       }
     })
 
-    test("handles position information correctly", () => {
-      let customPos = Position.make(20, 35)
+    test("handles position information correctly", t => {
+      let customPos = Types.Position.make(20, 35)
       let result = LinkParser.parse("\"Test\"", customPos, testBounds)
 
       switch result {
       | Some(Types.Link({position})) => {
-          expect(position.row)->toBe(20)
-          expect(position.col)->toBe(35)
+          t->expect(position.row)->Expect.toBe(20)
+          t->expect(position.col)->Expect.toBe(35)
         }
-      | _ => fail("Expected Link element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link element
       }
     })
   })

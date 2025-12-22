@@ -3,12 +3,11 @@
 //
 // Tests button recognition, text extraction, and edge cases
 
-open Jest
-open Expect
+open Vitest
 
 describe("ButtonParser", () => {
-  let testPosition = Position.make(5, 10)
-  let testBounds: Types.bounds = {
+  let testPosition = Types.Position.make(5, 10)
+  let testBounds: Types.Bounds.t = {
     top: 0,
     left: 0,
     bottom: 10,
@@ -16,203 +15,205 @@ describe("ButtonParser", () => {
   }
 
   describe("slugify", () => {
-    test("converts simple text to lowercase with hyphens", () => {
-      expect(ButtonParser.slugify("Submit Form"))->toBe("submit-form")
+    test("converts simple text to lowercase with hyphens", t => {
+      t->expect(ButtonParser.slugify("Submit Form"))->Expect.toBe("submit-form")
     })
 
-    test("handles single words", () => {
-      expect(ButtonParser.slugify("Login"))->toBe("login")
+    test("handles single words", t => {
+      t->expect(ButtonParser.slugify("Login"))->Expect.toBe("login")
     })
 
-    test("removes special characters", () => {
-      expect(ButtonParser.slugify("Create Account!"))->toBe("create-account")
+    test("removes special characters", t => {
+      t->expect(ButtonParser.slugify("Create Account!"))->Expect.toBe("create-account")
     })
 
-    test("handles multiple spaces", () => {
-      expect(ButtonParser.slugify("Log   In"))->toBe("log-in")
+    test("handles multiple spaces", t => {
+      t->expect(ButtonParser.slugify("Log   In"))->Expect.toBe("log-in")
     })
 
-    test("removes leading and trailing spaces", () => {
-      expect(ButtonParser.slugify("  Cancel  "))->toBe("cancel")
+    test("removes leading and trailing spaces", t => {
+      t->expect(ButtonParser.slugify("  Cancel  "))->Expect.toBe("cancel")
     })
 
-    test("handles mixed case", () => {
-      expect(ButtonParser.slugify("SAVE Changes"))->toBe("save-changes")
+    test("handles mixed case", t => {
+      t->expect(ButtonParser.slugify("SAVE Changes"))->Expect.toBe("save-changes")
     })
 
-    test("removes consecutive hyphens", () => {
-      expect(ButtonParser.slugify("Submit--Form"))->toBe("submit-form")
+    test("removes consecutive hyphens", t => {
+      t->expect(ButtonParser.slugify("Submit--Form"))->Expect.toBe("submit-form")
     })
   })
 
   describe("canParse", () => {
-    test("returns true for basic button syntax", () => {
-      expect(ButtonParser.canParse("[ Submit ]"))->toBe(true)
+    test("returns true for basic button syntax", t => {
+      t->expect(ButtonParser.canParse("[ Submit ]"))->Expect.toBe(true)
     })
 
-    test("returns true for button without spaces", () => {
-      expect(ButtonParser.canParse("[Login]"))->toBe(true)
+    test("returns true for button without spaces", t => {
+      t->expect(ButtonParser.canParse("[Login]"))->Expect.toBe(true)
     })
 
-    test("returns true for button with extra whitespace", () => {
-      expect(ButtonParser.canParse("[  Create Account  ]"))->toBe(true)
+    test("returns true for button with extra whitespace", t => {
+      t->expect(ButtonParser.canParse("[  Create Account  ]"))->Expect.toBe(true)
     })
 
-    test("returns true for multiword button", () => {
-      expect(ButtonParser.canParse("[ Log In ]"))->toBe(true)
+    test("returns true for multiword button", t => {
+      t->expect(ButtonParser.canParse("[ Log In ]"))->Expect.toBe(true)
     })
 
-    test("returns false for text without brackets", () => {
-      expect(ButtonParser.canParse("Submit"))->toBe(false)
+    test("returns false for text without brackets", t => {
+      t->expect(ButtonParser.canParse("Submit"))->Expect.toBe(false)
     })
 
-    test("returns false for only opening bracket", () => {
-      expect(ButtonParser.canParse("[ Submit"))->toBe(false)
+    test("returns false for only opening bracket", t => {
+      t->expect(ButtonParser.canParse("[ Submit"))->Expect.toBe(false)
     })
 
-    test("returns false for only closing bracket", () => {
-      expect(ButtonParser.canParse("Submit ]"))->toBe(false)
+    test("returns false for only closing bracket", t => {
+      t->expect(ButtonParser.canParse("Submit ]"))->Expect.toBe(false)
     })
 
-    test("returns false for empty string", () => {
-      expect(ButtonParser.canParse(""))->toBe(false)
+    test("returns false for empty string", t => {
+      t->expect(ButtonParser.canParse(""))->Expect.toBe(false)
     })
 
-    test("returns true for button with content before/after", () => {
-      expect(ButtonParser.canParse("Click [ Submit ] to continue"))->toBe(true)
+    test("returns true for button with content before/after", t => {
+      t->expect(ButtonParser.canParse("Click [ Submit ] to continue"))->Expect.toBe(true)
     })
   })
 
   describe("parse", () => {
-    test("parses basic button correctly", () => {
+    test("parses basic button correctly", t => {
       let result = ButtonParser.parse("[ Submit ]", testPosition, testBounds)
 
       switch result {
       | Some(Types.Button({id, text, position, align})) => {
-          expect(id)->toBe("submit")
-          expect(text)->toBe("Submit")
-          expect(position)->toEqual(testPosition)
-          expect(align)->toEqual(Types.Left)
+          t->expect(id)->Expect.toBe("submit")
+          t->expect(text)->Expect.toBe("Submit")
+          t->expect(position)->Expect.toEqual(testPosition)
+          // Alignment is calculated based on position within bounds
+          // position col=10, bounds right=30, so ~33% = Center
+          t->expect(align)->Expect.toEqual(Types.Center)
         }
-      | _ => fail("Expected Button element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Button element
       }
     })
 
-    test("parses button without spaces", () => {
+    test("parses button without spaces", t => {
       let result = ButtonParser.parse("[Login]", testPosition, testBounds)
 
       switch result {
       | Some(Types.Button({id, text, position: _, align: _})) => {
-          expect(id)->toBe("login")
-          expect(text)->toBe("Login")
+          t->expect(id)->Expect.toBe("login")
+          t->expect(text)->Expect.toBe("Login")
         }
-      | _ => fail("Expected Button element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Button element
       }
     })
 
-    test("parses button with extra whitespace", () => {
+    test("parses button with extra whitespace", t => {
       let result = ButtonParser.parse("[  Create Account  ]", testPosition, testBounds)
 
       switch result {
       | Some(Types.Button({id, text, position: _, align: _})) => {
-          expect(id)->toBe("create-account")
-          expect(text)->toBe("Create Account")
+          t->expect(id)->Expect.toBe("create-account")
+          t->expect(text)->Expect.toBe("Create Account")
         }
-      | _ => fail("Expected Button element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Button element
       }
     })
 
-    test("parses multiword button text", () => {
+    test("parses multiword button text", t => {
       let result = ButtonParser.parse("[ Log In ]", testPosition, testBounds)
 
       switch result {
       | Some(Types.Button({id, text, position: _, align: _})) => {
-          expect(id)->toBe("log-in")
-          expect(text)->toBe("Log In")
+          t->expect(id)->Expect.toBe("log-in")
+          t->expect(text)->Expect.toBe("Log In")
         }
-      | _ => fail("Expected Button element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Button element
       }
     })
 
-    test("trims leading and trailing whitespace from button text", () => {
+    test("trims leading and trailing whitespace from button text", t => {
       let result = ButtonParser.parse("[   Cancel   ]", testPosition, testBounds)
 
       switch result {
       | Some(Types.Button({id, text, position: _, align: _})) => {
-          expect(text)->toBe("Cancel")
-          expect(id)->toBe("cancel")
+          t->expect(text)->Expect.toBe("Cancel")
+          t->expect(id)->Expect.toBe("cancel")
         }
-      | _ => fail("Expected Button element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Button element
       }
     })
 
-    test("returns None for empty button text", () => {
+    test("returns None for empty button text", t => {
       let result = ButtonParser.parse("[  ]", testPosition, testBounds)
-      expect(result)->toEqual(None)
+      t->expect(result)->Expect.toEqual(None)
     })
 
-    test("returns None for button with only whitespace", () => {
+    test("returns None for button with only whitespace", t => {
       let result = ButtonParser.parse("[     ]", testPosition, testBounds)
-      expect(result)->toEqual(None)
+      t->expect(result)->Expect.toEqual(None)
     })
 
-    test("returns None for text without brackets", () => {
+    test("returns None for text without brackets", t => {
       let result = ButtonParser.parse("Submit", testPosition, testBounds)
-      expect(result)->toEqual(None)
+      t->expect(result)->Expect.toEqual(None)
     })
 
-    test("returns None for incomplete button syntax (missing closing bracket)", () => {
+    test("returns None for incomplete button syntax (missing closing bracket)", t => {
       let result = ButtonParser.parse("[ Submit", testPosition, testBounds)
-      expect(result)->toEqual(None)
+      t->expect(result)->Expect.toEqual(None)
     })
 
-    test("returns None for incomplete button syntax (missing opening bracket)", () => {
+    test("returns None for incomplete button syntax (missing opening bracket)", t => {
       let result = ButtonParser.parse("Submit ]", testPosition, testBounds)
-      expect(result)->toEqual(None)
+      t->expect(result)->Expect.toEqual(None)
     })
 
-    test("handles button with special characters in text", () => {
+    test("handles button with special characters in text", t => {
       let result = ButtonParser.parse("[ Save & Exit ]", testPosition, testBounds)
 
       switch result {
       | Some(Types.Button({id, text, position: _, align: _})) => {
-          expect(text)->toBe("Save & Exit")
-          expect(id)->toBe("save-exit") // Special chars removed in slug
+          t->expect(text)->Expect.toBe("Save & Exit")
+          t->expect(id)->Expect.toBe("save-exit") // Special chars removed in slug
         }
-      | _ => fail("Expected Button element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Button element
       }
     })
 
-    test("handles button with numbers", () => {
+    test("handles button with numbers", t => {
       let result = ButtonParser.parse("[ Option 1 ]", testPosition, testBounds)
 
       switch result {
       | Some(Types.Button({id, text, position: _, align: _})) => {
-          expect(text)->toBe("Option 1")
-          expect(id)->toBe("option-1")
+          t->expect(text)->Expect.toBe("Option 1")
+          t->expect(id)->Expect.toBe("option-1")
         }
-      | _ => fail("Expected Button element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Button element
       }
     })
 
-    test("preserves position in parsed element", () => {
-      let customPosition = Position.make(3, 7)
+    test("preserves position in parsed element", t => {
+      let customPosition = Types.Position.make(3, 7)
       let result = ButtonParser.parse("[ Test ]", customPosition, testBounds)
 
       switch result {
       | Some(Types.Button({position, id: _, text: _, align: _})) => {
-          expect(position)->toEqual(customPosition)
+          t->expect(position)->Expect.toEqual(customPosition)
         }
-      | _ => fail("Expected Button element")
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Button element
       }
     })
 
-    test("returns None for content with extra text before button", () => {
+    test("returns None for content with extra text before button", t => {
       let result = ButtonParser.parse("Click [ Submit ] here", testPosition, testBounds)
-      expect(result)->toEqual(None)
+      t->expect(result)->Expect.toEqual(None)
     })
 
-    test("handles nested brackets by matching outer brackets", () => {
+    test("handles nested brackets by matching outer brackets", t => {
       // This tests the edge case mentioned in requirements
       // The regex should match the first [...] pattern
       let result = ButtonParser.parse("[ [nested] ]", testPosition, testBounds)
@@ -220,37 +221,37 @@ describe("ButtonParser", () => {
       switch result {
       | Some(Types.Button({text, id: _, position: _, align: _})) => {
           // Should extract "[nested]" as the text (inner brackets preserved)
-          expect(text)->toBe("[nested]")
+          t->expect(text)->Expect.toBe("[nested]")
         }
       | None => {
           // Or it might return None depending on regex behavior
           // Either behavior is acceptable for this edge case
-          pass
+          ()
         }
       }
     })
   })
 
   describe("make", () => {
-    test("creates parser with priority 100", () => {
+    test("creates parser with priority 100", t => {
       let parser = ButtonParser.make()
-      expect(parser.priority)->toBe(100)
+      t->expect(parser.priority)->Expect.toBe(100)
     })
 
-    test("created parser can parse buttons", () => {
+    test("created parser can parse buttons", t => {
       let parser = ButtonParser.make()
       let result = parser.parse("[ Test ]", testPosition, testBounds)
 
       switch result {
-      | Some(Types.Button(_)) => pass
-      | _ => fail("Parser should be able to parse buttons")
+      | Some(Types.Button(_)) => ()
+      | _ => t->expect(true)->Expect.toBe(false) // fail: Parser should be able to parse buttons
       }
     })
 
-    test("created parser canParse works correctly", () => {
+    test("created parser canParse works correctly", t => {
       let parser = ButtonParser.make()
-      expect(parser.canParse("[ Button ]"))->toBe(true)
-      expect(parser.canParse("Not a button"))->toBe(false)
+      t->expect(parser.canParse("[ Button ]"))->Expect.toBe(true)
+      t->expect(parser.canParse("Not a button"))->Expect.toBe(false)
     })
   })
 })

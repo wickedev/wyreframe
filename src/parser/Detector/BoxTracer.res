@@ -149,15 +149,84 @@ let traceBox = (grid: Grid.t, topLeft: Position.t): traceResult => {
           }
 
           switch bottomRightOpt {
-          | None =>
-            Error(
-              ErrorTypes.makeSimple(
-                ErrorTypes.UncloseBox({
-                  corner: topRight,
-                  direction: "right",
-                }),
-              ),
-            )
+          | None => {
+              // Right edge scan failed - could be width mismatch
+              // Try tracing from left side to detect width mismatch
+              let leftEdgeScan = Grid.scanDown(grid, topLeft, isValidVerticalChar)
+              let bottomLeftOpt = {
+                let lastCorner = ref(None)
+                Array.forEach(leftEdgeScan, ((pos, cell)) => {
+                  switch cell {
+                  | Corner if !Position.equals(pos, topLeft) => lastCorner := Some(pos)
+                  | _ => ()
+                  }
+                })
+                lastCorner.contents
+              }
+
+              switch bottomLeftOpt {
+              | None =>
+                Error(
+                  ErrorTypes.makeSimple(
+                    ErrorTypes.UncloseBox({
+                      corner: topRight,
+                      direction: "right",
+                    }),
+                  ),
+                )
+              | Some(bottomLeft) => {
+                  // Found bottom-left, now scan right to find bottom edge width
+                  let bottomEdgeScan = Grid.scanRight(grid, bottomLeft, isValidHorizontalChar)
+                  let bottomRightFromLeft = {
+                    let lastCorner = ref(None)
+                    Array.forEach(bottomEdgeScan, ((pos, cell)) => {
+                      switch cell {
+                      | Corner if !Position.equals(pos, bottomLeft) => lastCorner := Some(pos)
+                      | _ => ()
+                      }
+                    })
+                    lastCorner.contents
+                  }
+
+                  switch bottomRightFromLeft {
+                  | None =>
+                    Error(
+                      ErrorTypes.makeSimple(
+                        ErrorTypes.UncloseBox({
+                          corner: bottomLeft,
+                          direction: "bottom",
+                        }),
+                      ),
+                    )
+                  | Some(actualBottomRight) => {
+                      // Check if this is a width mismatch
+                      let bottomWidth = actualBottomRight.col - bottomLeft.col
+                      if topWidth !== bottomWidth {
+                        Error(
+                          ErrorTypes.makeSimple(
+                            ErrorTypes.MismatchedWidth({
+                              topLeft: topLeft,
+                              topWidth: topWidth,
+                              bottomWidth: bottomWidth,
+                            }),
+                          ),
+                        )
+                      } else {
+                        // Widths match but right edge still failed - unclosed box
+                        Error(
+                          ErrorTypes.makeSimple(
+                            ErrorTypes.UncloseBox({
+                              corner: topRight,
+                              direction: "right",
+                            }),
+                          ),
+                        )
+                      }
+                    }
+                  }
+                }
+              }
+            }
           | Some(bottomRight) => {
               // Step 5: Scan left from bottom-right to find bottom-left corner
               let bottomEdgeScan = Grid.scanLeft(grid, bottomRight, isValidHorizontalChar)

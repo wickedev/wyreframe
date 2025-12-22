@@ -46,12 +46,12 @@ module rec Position: {
 
   let equals = (a: t, b: t): bool => a.row == b.row && a.col == b.col
 
-  // Check if position is within given bounds (exclusive of borders)
+  // Check if position is within given bounds (inclusive)
   let isWithin = (pos: t, bounds: Bounds.t): bool => {
-    pos.row > bounds.top &&
-    pos.row < bounds.bottom &&
-    pos.col > bounds.left &&
-    pos.col < bounds.right
+    pos.row >= bounds.top &&
+    pos.row <= bounds.bottom &&
+    pos.col >= bounds.left &&
+    pos.col <= bounds.right
   }
 
   let toString = (pos: t): string => `(${Int.toString(pos.row)}, ${Int.toString(pos.col)})`
@@ -92,11 +92,12 @@ and Bounds: {
   let height = (bounds: t): int => bounds.bottom - bounds.top
   let area = (bounds: t): int => width(bounds) * height(bounds)
 
+  // Strict containment - inner must be strictly inside outer (not touching edges)
   let contains = (outer: t, inner: t): bool => {
-    outer.top <= inner.top &&
-    outer.left <= inner.left &&
-    outer.bottom >= inner.bottom &&
-    outer.right >= inner.right
+    outer.top < inner.top &&
+    outer.left < inner.left &&
+    outer.bottom > inner.bottom &&
+    outer.right > inner.right
   }
 
   let overlaps = (a: t, b: t): bool => {

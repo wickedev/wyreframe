@@ -1,52 +1,53 @@
 // Core Types Test Suite
 // Tests for all type definitions and their behavior
 
-open Jest
-open Expect
+open Vitest
+open Types
 
 describe("Types - cellChar variant", () => {
-  test("Corner variant can be created", () => {
+  test("Corner variant can be created", t => {
     let cell = Corner
-    expect(cell)->toBe(Corner)
+    t->expect(cell)->Expect.toBe(Corner)
   })
 
-  test("HLine variant can be created", () => {
+  test("HLine variant can be created", t => {
     let cell = HLine
-    expect(cell)->toBe(HLine)
+    t->expect(cell)->Expect.toBe(HLine)
   })
 
-  test("VLine variant can be created", () => {
+  test("VLine variant can be created", t => {
     let cell = VLine
-    expect(cell)->toBe(VLine)
+    t->expect(cell)->Expect.toBe(VLine)
   })
 
-  test("Divider variant can be created", () => {
-    let cell = Divider
-    expect(cell)->toBe(Divider)
+  test("Divider variant can be created", t => {
+    let cell: cellChar = Divider
+    t->expect(cell)->Expect.toBe(Divider)
   })
 
-  test("Space variant can be created", () => {
+  test("Space variant can be created", t => {
     let cell = Space
-    expect(cell)->toBe(Space)
+    t->expect(cell)->Expect.toBe(Space)
   })
 
-  test("Char variant can be created with content", () => {
+  test("Char variant can be created with content", t => {
     let cell = Char("a")
-    expect(cell)->toEqual(Char("a"))
+    t->expect(cell)->Expect.toEqual(Char("a"))
   })
 
-  test("cellChar variants are distinct", () => {
-    expect(Corner)->not->toBe(HLine)
-    expect(HLine)->not->toBe(VLine)
-    expect(VLine)->not->toBe(Divider)
-    expect(Divider)->not->toBe(Space)
+  test("cellChar variants are distinct", t => {
+    let divider: cellChar = Divider
+    t->expect(Corner)->Expect.not->Expect.toBe(HLine)
+    t->expect(HLine)->Expect.not->Expect.toBe(VLine)
+    t->expect(VLine)->Expect.not->Expect.toBe(divider)
+    t->expect(divider)->Expect.not->Expect.toBe(Space)
   })
 
-  test("Char variant with different content are distinct", () => {
-    expect(Char("a"))->not->toEqual(Char("b"))
+  test("Char variant with different content are distinct", t => {
+    t->expect(Char("a"))->Expect.not->Expect.toEqual(Char("b"))
   })
 
-  test("pattern matching on cellChar works", () => {
+  test("pattern matching on cellChar works", t => {
     let classify = cell =>
       switch cell {
       | Corner => "corner"
@@ -57,46 +58,46 @@ describe("Types - cellChar variant", () => {
       | Char(_) => "char"
       }
 
-    expect(classify(Corner))->toBe("corner")
-    expect(classify(HLine))->toBe("hline")
-    expect(classify(VLine))->toBe("vline")
-    expect(classify(Divider))->toBe("divider")
-    expect(classify(Space))->toBe("space")
-    expect(classify(Char("x")))->toBe("char")
+    t->expect(classify(Corner))->Expect.toBe("corner")
+    t->expect(classify(HLine))->Expect.toBe("hline")
+    t->expect(classify(VLine))->Expect.toBe("vline")
+    t->expect(classify(Divider))->Expect.toBe("divider")
+    t->expect(classify(Space))->Expect.toBe("space")
+    t->expect(classify(Char("x")))->Expect.toBe("char")
   })
 
-  test("extracting content from Char variant", () => {
+  test("extracting content from Char variant", t => {
     let cell = Char("hello")
     switch cell {
-    | Char(content) => expect(content)->toBe("hello")
-    | _ => fail("Expected Char variant")
+    | Char(content) => t->expect(content)->Expect.toBe("hello")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Char variant
     }
   })
 })
 
 describe("Types - alignment variant", () => {
-  test("Left alignment can be created", () => {
+  test("Left alignment can be created", t => {
     let align = Left
-    expect(align)->toBe(Left)
+    t->expect(align)->Expect.toBe(Left)
   })
 
-  test("Center alignment can be created", () => {
+  test("Center alignment can be created", t => {
     let align = Center
-    expect(align)->toBe(Center)
+    t->expect(align)->Expect.toBe(Center)
   })
 
-  test("Right alignment can be created", () => {
+  test("Right alignment can be created", t => {
     let align = Right
-    expect(align)->toBe(Right)
+    t->expect(align)->Expect.toBe(Right)
   })
 
-  test("alignment variants are distinct", () => {
-    expect(Left)->not->toBe(Center)
-    expect(Center)->not->toBe(Right)
-    expect(Right)->not->toBe(Left)
+  test("alignment variants are distinct", t => {
+    t->expect(Left)->Expect.not->Expect.toBe(Center)
+    t->expect(Center)->Expect.not->Expect.toBe(Right)
+    t->expect(Right)->Expect.not->Expect.toBe(Left)
   })
 
-  test("pattern matching on alignment works", () => {
+  test("pattern matching on alignment works", t => {
     let toString = align =>
       switch align {
       | Left => "left"
@@ -104,56 +105,56 @@ describe("Types - alignment variant", () => {
       | Right => "right"
       }
 
-    expect(toString(Left))->toBe("left")
-    expect(toString(Center))->toBe("center")
-    expect(toString(Right))->toBe("right")
+    t->expect(toString(Left))->Expect.toBe("left")
+    t->expect(toString(Center))->Expect.toBe("center")
+    t->expect(toString(Right))->Expect.toBe("right")
   })
 })
 
 describe("Types - position record", () => {
-  test("position can be created", () => {
-    let pos = {row: 5, col: 10}
-    expect(pos.row)->toBe(5)
-    expect(pos.col)->toBe(10)
+  test("position can be created", t => {
+    let pos: Position.t = {row: 5, col: 10}
+    t->expect(pos.row)->Expect.toBe(5)
+    t->expect(pos.col)->Expect.toBe(10)
   })
 
-  test("position equality", () => {
-    let pos1 = {row: 5, col: 10}
-    let pos2 = {row: 5, col: 10}
-    expect(pos1)->toEqual(pos2)
+  test("position equality", t => {
+    let pos1: Position.t = {row: 5, col: 10}
+    let pos2: Position.t = {row: 5, col: 10}
+    t->expect(pos1)->Expect.toEqual(pos2)
   })
 
-  test("position inequality", () => {
-    let pos1 = {row: 5, col: 10}
-    let pos2 = {row: 5, col: 11}
-    expect(pos1)->not->toEqual(pos2)
+  test("position inequality", t => {
+    let pos1: Position.t = {row: 5, col: 10}
+    let pos2: Position.t = {row: 5, col: 11}
+    t->expect(pos1)->Expect.not->Expect.toEqual(pos2)
   })
 })
 
 describe("Types - bounds record", () => {
-  test("bounds can be created", () => {
-    let b = {top: 0, left: 0, bottom: 10, right: 20}
-    expect(b.top)->toBe(0)
-    expect(b.left)->toBe(0)
-    expect(b.bottom)->toBe(10)
-    expect(b.right)->toBe(20)
+  test("bounds can be created", t => {
+    let b: Bounds.t = {top: 0, left: 0, bottom: 10, right: 20}
+    t->expect(b.top)->Expect.toBe(0)
+    t->expect(b.left)->Expect.toBe(0)
+    t->expect(b.bottom)->Expect.toBe(10)
+    t->expect(b.right)->Expect.toBe(20)
   })
 
-  test("bounds equality", () => {
-    let b1 = {top: 0, left: 0, bottom: 10, right: 20}
-    let b2 = {top: 0, left: 0, bottom: 10, right: 20}
-    expect(b1)->toEqual(b2)
+  test("bounds equality", t => {
+    let b1: Bounds.t = {top: 0, left: 0, bottom: 10, right: 20}
+    let b2: Bounds.t = {top: 0, left: 0, bottom: 10, right: 20}
+    t->expect(b1)->Expect.toEqual(b2)
   })
 
-  test("bounds inequality", () => {
-    let b1 = {top: 0, left: 0, bottom: 10, right: 20}
-    let b2 = {top: 0, left: 0, bottom: 11, right: 20}
-    expect(b1)->not->toEqual(b2)
+  test("bounds inequality", t => {
+    let b1: Bounds.t = {top: 0, left: 0, bottom: 10, right: 20}
+    let b2: Bounds.t = {top: 0, left: 0, bottom: 11, right: 20}
+    t->expect(b1)->Expect.not->Expect.toEqual(b2)
   })
 })
 
 describe("Types - element variant", () => {
-  test("Box element can be created", () => {
+  test("Box element can be created", t => {
     let box = Box({
       name: Some("Login"),
       bounds: {top: 0, left: 0, bottom: 10, right: 20},
@@ -163,14 +164,14 @@ describe("Types - element variant", () => {
     switch box {
     | Box({name}) =>
       switch name {
-      | Some(n) => expect(n)->toBe("Login")
-      | None => fail("Expected Some name")
+      | Some(n) => t->expect(n)->Expect.toBe("Login")
+      | None => t->expect(true)->Expect.toBe(false) // fail: Expected Some name
       }
-    | _ => fail("Expected Box variant")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Box variant
     }
   })
 
-  test("Box element with no name", () => {
+  test("Box element with no name", t => {
     let box = Box({
       name: None,
       bounds: {top: 0, left: 0, bottom: 10, right: 20},
@@ -178,30 +179,31 @@ describe("Types - element variant", () => {
     })
 
     switch box {
-    | Box({name}) => expect(name)->toBe(None)
-    | _ => fail("Expected Box variant")
+    | Box({name}) => t->expect(name)->Expect.toBe(None)
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Box variant
     }
   })
 
-  test("Button element can be created", () => {
+  test("Button element can be created", t => {
     let button = Button({
       id: "submit",
       text: "Submit",
       position: {row: 5, col: 10},
       align: Center,
+      actions: [],
     })
 
     switch button {
     | Button({id, text, align}) => {
-        expect(id)->toBe("submit")
-        expect(text)->toBe("Submit")
-        expect(align)->toBe(Center)
+        t->expect(id)->Expect.toBe("submit")
+        t->expect(text)->Expect.toBe("Submit")
+        t->expect(align)->Expect.toBe(Center)
       }
-    | _ => fail("Expected Button variant")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Button variant
     }
   })
 
-  test("Input element can be created", () => {
+  test("Input element can be created", t => {
     let input = Input({
       id: "email",
       placeholder: Some("Enter email"),
@@ -210,35 +212,36 @@ describe("Types - element variant", () => {
 
     switch input {
     | Input({id, placeholder}) => {
-        expect(id)->toBe("email")
+        t->expect(id)->Expect.toBe("email")
         switch placeholder {
-        | Some(p) => expect(p)->toBe("Enter email")
-        | None => fail("Expected Some placeholder")
+        | Some(p) => t->expect(p)->Expect.toBe("Enter email")
+        | None => t->expect(true)->Expect.toBe(false) // fail: Expected Some placeholder
         }
       }
-    | _ => fail("Expected Input variant")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Input variant
     }
   })
 
-  test("Link element can be created", () => {
+  test("Link element can be created", t => {
     let link = Link({
       id: "forgot-password",
       text: "Forgot Password?",
       position: {row: 8, col: 15},
       align: Right,
+      actions: [],
     })
 
     switch link {
     | Link({id, text, align}) => {
-        expect(id)->toBe("forgot-password")
-        expect(text)->toBe("Forgot Password?")
-        expect(align)->toBe(Right)
+        t->expect(id)->Expect.toBe("forgot-password")
+        t->expect(text)->Expect.toBe("Forgot Password?")
+        t->expect(align)->Expect.toBe(Right)
       }
-    | _ => fail("Expected Link variant")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Link variant
     }
   })
 
-  test("Checkbox element can be created", () => {
+  test("Checkbox element can be created", t => {
     let checkbox = Checkbox({
       checked: true,
       label: "Remember me",
@@ -247,14 +250,14 @@ describe("Types - element variant", () => {
 
     switch checkbox {
     | Checkbox({checked, label}) => {
-        expect(checked)->toBe(true)
-        expect(label)->toBe("Remember me")
+        t->expect(checked)->Expect.toBe(true)
+        t->expect(label)->Expect.toBe("Remember me")
       }
-    | _ => fail("Expected Checkbox variant")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Checkbox variant
     }
   })
 
-  test("Text element can be created", () => {
+  test("Text element can be created", t => {
     let text = Text({
       content: "Welcome",
       emphasis: false,
@@ -264,15 +267,15 @@ describe("Types - element variant", () => {
 
     switch text {
     | Text({content, emphasis, align}) => {
-        expect(content)->toBe("Welcome")
-        expect(emphasis)->toBe(false)
-        expect(align)->toBe(Left)
+        t->expect(content)->Expect.toBe("Welcome")
+        t->expect(emphasis)->Expect.toBe(false)
+        t->expect(align)->Expect.toBe(Left)
       }
-    | _ => fail("Expected Text variant")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Text variant
     }
   })
 
-  test("Text element with emphasis", () => {
+  test("Text element with emphasis", t => {
     let text = Text({
       content: "Important",
       emphasis: true,
@@ -281,50 +284,51 @@ describe("Types - element variant", () => {
     })
 
     switch text {
-    | Text({emphasis}) => expect(emphasis)->toBe(true)
-    | _ => fail("Expected Text variant")
+    | Text({emphasis}) => t->expect(emphasis)->Expect.toBe(true)
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Text variant
     }
   })
 
-  test("Divider element can be created", () => {
+  test("Divider element can be created", t => {
     let divider = Divider({position: {row: 5, col: 0}})
 
     switch divider {
-    | Divider({position}) => expect(position.row)->toBe(5)
-    | _ => fail("Expected Divider variant")
+    | Divider({position}) => t->expect(position.row)->Expect.toBe(5)
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Divider variant
     }
   })
 
-  test("Row element can be created", () => {
+  test("Row element can be created", t => {
     let row = Row({
       children: [],
       align: Center,
     })
 
     switch row {
-    | Row({align}) => expect(align)->toBe(Center)
-    | _ => fail("Expected Row variant")
+    | Row({align}) => t->expect(align)->Expect.toBe(Center)
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Row variant
     }
   })
 
-  test("Section element can be created", () => {
+  test("Section element can be created", t => {
     let section = Section({
       name: "Header",
       children: [],
     })
 
     switch section {
-    | Section({name}) => expect(name)->toBe("Header")
-    | _ => fail("Expected Section variant")
+    | Section({name}) => t->expect(name)->Expect.toBe("Header")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Section variant
     }
   })
 
-  test("Box can contain nested elements", () => {
+  test("Box can contain nested elements", t => {
     let button = Button({
       id: "submit",
       text: "Submit",
       position: {row: 5, col: 10},
       align: Center,
+      actions: [],
     })
 
     let box = Box({
@@ -334,12 +338,12 @@ describe("Types - element variant", () => {
     })
 
     switch box {
-    | Box({children}) => expect(Array.length(children))->toBe(1)
-    | _ => fail("Expected Box variant")
+    | Box({children}) => t->expect(Array.length(children))->Expect.toBe(1)
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Box variant
     }
   })
 
-  test("pattern matching on element types", () => {
+  test("pattern matching on element types", t => {
     let getType = element =>
       switch element {
       | Box(_) => "box"
@@ -353,133 +357,142 @@ describe("Types - element variant", () => {
       | Section(_) => "section"
       }
 
-    expect(getType(Box({name: None, bounds: {top: 0, left: 0, bottom: 1, right: 1}, children: []})))->toBe("box")
-    expect(getType(Button({id: "b", text: "B", position: {row: 0, col: 0}, align: Left})))->toBe("button")
-    expect(getType(Input({id: "i", placeholder: None, position: {row: 0, col: 0}})))->toBe("input")
-    expect(getType(Link({id: "l", text: "L", position: {row: 0, col: 0}, align: Left})))->toBe("link")
-    expect(getType(Checkbox({checked: false, label: "C", position: {row: 0, col: 0}})))->toBe("checkbox")
-    expect(getType(Text({content: "T", emphasis: false, position: {row: 0, col: 0}, align: Left})))->toBe("text")
-    expect(getType(Divider({position: {row: 0, col: 0}})))->toBe("divider")
-    expect(getType(Row({children: [], align: Left})))->toBe("row")
-    expect(getType(Section({name: "S", children: []})))->toBe("section")
+    t->expect(getType(Box({name: None, bounds: {top: 0, left: 0, bottom: 1, right: 1}, children: []})))->Expect.toBe("box")
+    t->expect(getType(Button({id: "b", text: "B", position: {row: 0, col: 0}, align: Left, actions: []})))->Expect.toBe("button")
+    t->expect(getType(Input({id: "i", placeholder: None, position: {row: 0, col: 0}})))->Expect.toBe("input")
+    t->expect(getType(Link({id: "l", text: "L", position: {row: 0, col: 0}, align: Left, actions: []})))->Expect.toBe("link")
+    t->expect(getType(Checkbox({checked: false, label: "C", position: {row: 0, col: 0}})))->Expect.toBe("checkbox")
+    t->expect(getType(Text({content: "T", emphasis: false, position: {row: 0, col: 0}, align: Left})))->Expect.toBe("text")
+    t->expect(getType(Divider({position: {row: 0, col: 0}})))->Expect.toBe("divider")
+    t->expect(getType(Row({children: [], align: Left})))->Expect.toBe("row")
+    t->expect(getType(Section({name: "S", children: []})))->Expect.toBe("section")
   })
 })
 
 describe("Types - scene record", () => {
-  test("scene can be created", () => {
-    let scene = {
+  test("scene can be created", t => {
+    let scene: scene = {
       id: "login",
       title: "Login Page",
       transition: "fade",
+      device: Desktop,
       elements: [],
     }
 
-    expect(scene.id)->toBe("login")
-    expect(scene.title)->toBe("Login Page")
-    expect(scene.transition)->toBe("fade")
-    expect(Array.length(scene.elements))->toBe(0)
+    t->expect(scene.id)->Expect.toBe("login")
+    t->expect(scene.title)->Expect.toBe("Login Page")
+    t->expect(scene.transition)->Expect.toBe("fade")
+    t->expect(Array.length(scene.elements))->Expect.toBe(0)
   })
 
-  test("scene can contain elements", () => {
+  test("scene can contain elements", t => {
     let button = Button({
       id: "submit",
       text: "Submit",
       position: {row: 5, col: 10},
       align: Center,
+      actions: [],
     })
 
-    let scene = {
+    let scene: scene = {
       id: "login",
       title: "Login Page",
       transition: "fade",
+      device: Desktop,
       elements: [button],
     }
 
-    expect(Array.length(scene.elements))->toBe(1)
+    t->expect(Array.length(scene.elements))->Expect.toBe(1)
   })
 
-  test("scene equality", () => {
-    let scene1 = {
+  test("scene equality", t => {
+    let scene1: scene = {
       id: "login",
       title: "Login",
       transition: "fade",
+      device: Desktop,
       elements: [],
     }
 
-    let scene2 = {
+    let scene2: scene = {
       id: "login",
       title: "Login",
       transition: "fade",
+      device: Desktop,
       elements: [],
     }
 
-    expect(scene1)->toEqual(scene2)
+    t->expect(scene1)->Expect.toEqual(scene2)
   })
 })
 
 describe("Types - ast record", () => {
-  test("ast can be created with empty scenes", () => {
+  test("ast can be created with empty scenes", t => {
     let ast = {scenes: []}
-    expect(Array.length(ast.scenes))->toBe(0)
+    t->expect(Array.length(ast.scenes))->Expect.toBe(0)
   })
 
-  test("ast can contain multiple scenes", () => {
-    let scene1 = {
+  test("ast can contain multiple scenes", t => {
+    let scene1: scene = {
       id: "login",
       title: "Login",
       transition: "fade",
+      device: Desktop,
       elements: [],
     }
 
-    let scene2 = {
+    let scene2: scene = {
       id: "home",
       title: "Home",
       transition: "slide",
+      device: Desktop,
       elements: [],
     }
 
-    let ast = {scenes: [scene1, scene2]}
-    expect(Array.length(ast.scenes))->toBe(2)
+    let ast: ast = {scenes: [scene1, scene2]}
+    t->expect(Array.length(ast.scenes))->Expect.toBe(2)
   })
 
-  test("ast scenes maintain order", () => {
-    let scene1 = {
+  test("ast scenes maintain order", t => {
+    let scene1: scene = {
       id: "login",
       title: "Login",
       transition: "fade",
+      device: Desktop,
       elements: [],
     }
 
-    let scene2 = {
+    let scene2: scene = {
       id: "home",
       title: "Home",
       transition: "slide",
+      device: Desktop,
       elements: [],
     }
 
-    let ast = {scenes: [scene1, scene2]}
-    expect(ast.scenes[0].id)->toBe("login")
-    expect(ast.scenes[1].id)->toBe("home")
+    let ast: ast = {scenes: [scene1, scene2]}
+    t->expect(Array.getUnsafe(ast.scenes, 0).id)->Expect.toBe("login")
+    t->expect(Array.getUnsafe(ast.scenes, 1).id)->Expect.toBe("home")
   })
 })
 
 describe("Types - interactionVariant", () => {
-  test("Primary variant can be created", () => {
+  test("Primary variant can be created", t => {
     let variant = Primary
-    expect(variant)->toBe(Primary)
+    t->expect(variant)->Expect.toBe(Primary)
   })
 
-  test("Secondary variant can be created", () => {
+  test("Secondary variant can be created", t => {
     let variant = Secondary
-    expect(variant)->toBe(Secondary)
+    t->expect(variant)->Expect.toBe(Secondary)
   })
 
-  test("Ghost variant can be created", () => {
+  test("Ghost variant can be created", t => {
     let variant = Ghost
-    expect(variant)->toBe(Ghost)
+    t->expect(variant)->Expect.toBe(Ghost)
   })
 
-  test("pattern matching on interactionVariant", () => {
+  test("pattern matching on interactionVariant", t => {
     let toString = variant =>
       switch variant {
       | Primary => "primary"
@@ -487,14 +500,14 @@ describe("Types - interactionVariant", () => {
       | Ghost => "ghost"
       }
 
-    expect(toString(Primary))->toBe("primary")
-    expect(toString(Secondary))->toBe("secondary")
-    expect(toString(Ghost))->toBe("ghost")
+    t->expect(toString(Primary))->Expect.toBe("primary")
+    t->expect(toString(Secondary))->Expect.toBe("secondary")
+    t->expect(toString(Ghost))->Expect.toBe("ghost")
   })
 })
 
 describe("Types - interactionAction", () => {
-  test("Goto action can be created", () => {
+  test("Goto action can be created", t => {
     let action = Goto({
       target: "home",
       transition: "fade",
@@ -503,41 +516,41 @@ describe("Types - interactionAction", () => {
 
     switch action {
     | Goto({target, transition, condition}) => {
-        expect(target)->toBe("home")
-        expect(transition)->toBe("fade")
+        t->expect(target)->Expect.toBe("home")
+        t->expect(transition)->Expect.toBe("fade")
         switch condition {
-        | Some(c) => expect(c)->toBe("isValid")
-        | None => fail("Expected Some condition")
+        | Some(c) => t->expect(c)->Expect.toBe("isValid")
+        | None => t->expect(true)->Expect.toBe(false) // fail: Expected Some condition
         }
       }
-    | _ => fail("Expected Goto variant")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Goto variant
     }
   })
 
-  test("Back action can be created", () => {
+  test("Back action can be created", t => {
     let action = Back
-    expect(action)->toBe(Back)
+    t->expect(action)->Expect.toBe(Back)
   })
 
-  test("Forward action can be created", () => {
+  test("Forward action can be created", t => {
     let action = Forward
-    expect(action)->toBe(Forward)
+    t->expect(action)->Expect.toBe(Forward)
   })
 
-  test("Validate action can be created", () => {
+  test("Validate action can be created", t => {
     let action = Validate({fields: ["email", "password"]})
 
     switch action {
     | Validate({fields}) => {
-        expect(Array.length(fields))->toBe(2)
-        expect(fields[0])->toBe("email")
-        expect(fields[1])->toBe("password")
+        t->expect(Array.length(fields))->Expect.toBe(2)
+        t->expect(Array.getUnsafe(fields, 0))->Expect.toBe("email")
+        t->expect(Array.getUnsafe(fields, 1))->Expect.toBe("password")
       }
-    | _ => fail("Expected Validate variant")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Validate variant
     }
   })
 
-  test("Call action can be created", () => {
+  test("Call action can be created", t => {
     let action = Call({
       function: "handleSubmit",
       args: ["arg1", "arg2"],
@@ -546,15 +559,15 @@ describe("Types - interactionAction", () => {
 
     switch action {
     | Call({function, args, condition}) => {
-        expect(function)->toBe("handleSubmit")
-        expect(Array.length(args))->toBe(2)
-        expect(condition)->toBe(None)
+        t->expect(function)->Expect.toBe("handleSubmit")
+        t->expect(Array.length(args))->Expect.toBe(2)
+        t->expect(condition)->Expect.toBe(None)
       }
-    | _ => fail("Expected Call variant")
+    | _ => t->expect(true)->Expect.toBe(false) // fail: Expected Call variant
     }
   })
 
-  test("pattern matching on interactionAction", () => {
+  test("pattern matching on interactionAction", t => {
     let getType = action =>
       switch action {
       | Goto(_) => "goto"
@@ -564,16 +577,16 @@ describe("Types - interactionAction", () => {
       | Call(_) => "call"
       }
 
-    expect(getType(Goto({target: "x", transition: "y", condition: None})))->toBe("goto")
-    expect(getType(Back))->toBe("back")
-    expect(getType(Forward))->toBe("forward")
-    expect(getType(Validate({fields: []})))->toBe("validate")
-    expect(getType(Call({function: "f", args: [], condition: None})))->toBe("call")
+    t->expect(getType(Goto({target: "x", transition: "y", condition: None})))->Expect.toBe("goto")
+    t->expect(getType(Back))->Expect.toBe("back")
+    t->expect(getType(Forward))->Expect.toBe("forward")
+    t->expect(getType(Validate({fields: []})))->Expect.toBe("validate")
+    t->expect(getType(Call({function: "f", args: [], condition: None})))->Expect.toBe("call")
   })
 })
 
 describe("Types - interaction record", () => {
-  test("interaction can be created", () => {
+  test("interaction can be created", t => {
     let props = Js.Dict.empty()
     Js.Dict.set(props, "variant", Js.Json.string("primary"))
 
@@ -583,11 +596,11 @@ describe("Types - interaction record", () => {
       actions: [Back],
     }
 
-    expect(interaction.elementId)->toBe("submit-button")
-    expect(Array.length(interaction.actions))->toBe(1)
+    t->expect(interaction.elementId)->Expect.toBe("submit-button")
+    t->expect(Array.length(interaction.actions))->Expect.toBe(1)
   })
 
-  test("interaction with multiple actions", () => {
+  test("interaction with multiple actions", t => {
     let interaction = {
       elementId: "form",
       properties: Js.Dict.empty(),
@@ -597,22 +610,22 @@ describe("Types - interaction record", () => {
       ],
     }
 
-    expect(Array.length(interaction.actions))->toBe(2)
+    t->expect(Array.length(interaction.actions))->Expect.toBe(2)
   })
 })
 
 describe("Types - sceneInteractions record", () => {
-  test("sceneInteractions can be created", () => {
+  test("sceneInteractions can be created", t => {
     let sceneInteractions = {
       sceneId: "login",
       interactions: [],
     }
 
-    expect(sceneInteractions.sceneId)->toBe("login")
-    expect(Array.length(sceneInteractions.interactions))->toBe(0)
+    t->expect(sceneInteractions.sceneId)->Expect.toBe("login")
+    t->expect(Array.length(sceneInteractions.interactions))->Expect.toBe(0)
   })
 
-  test("sceneInteractions can contain multiple interactions", () => {
+  test("sceneInteractions can contain multiple interactions", t => {
     let interaction1 = {
       elementId: "email",
       properties: Js.Dict.empty(),
@@ -630,8 +643,8 @@ describe("Types - sceneInteractions record", () => {
       interactions: [interaction1, interaction2],
     }
 
-    expect(Array.length(sceneInteractions.interactions))->toBe(2)
-    expect(sceneInteractions.interactions[0].elementId)->toBe("email")
-    expect(sceneInteractions.interactions[1].elementId)->toBe("password")
+    t->expect(Array.length(sceneInteractions.interactions))->Expect.toBe(2)
+    t->expect(Array.getUnsafe(sceneInteractions.interactions, 0).elementId)->Expect.toBe("email")
+    t->expect(Array.getUnsafe(sceneInteractions.interactions, 1).elementId)->Expect.toBe("password")
   })
 })

@@ -24,11 +24,9 @@
     "build": "npm run res:build && npm run ts:build",
     "ts:build": "tsc",
     "ts:watch": "tsc --watch",
-    "test": "NODE_OPTIONS='--experimental-vm-modules' jest",
-    "test:watch": "NODE_OPTIONS='--experimental-vm-modules' jest --watch",
-    "test:coverage": "NODE_OPTIONS='--experimental-vm-modules' jest --coverage",
-    "test:validation": "NODE_OPTIONS='--experimental-vm-modules' jest ParallelValidation",
-    "validate:parser": "npm run res:build && npm run test:validation",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage",
     "res:build": "rescript",
     "res:watch": "rescript build -w",
     "res:clean": "rescript clean",
@@ -43,13 +41,12 @@
   ],
   "license": "MIT",
   "dependencies": {
-    "@rescript/core": "^1.0.0",
-    "rescript": "^11.0.0"
+    "@rescript/core": "^1.6.1",
+    "rescript": "12",
+    "vitest": "^3.2.4"
   },
   "devDependencies": {
-    "@glennsl/rescript-jest": "^0.13.1",
-    "@types/jest": "^30.0.0",
-    "jest": "^30.2.0",
+    "rescript-vitest": "^2.1.1",
     "typescript": "^5.9.3"
   }
 }

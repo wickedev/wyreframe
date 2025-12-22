@@ -241,7 +241,6 @@ let formatError = (error: t): string => {
 }
 
 // Format complete error message from ParseError with code snippet context
-// This is the main formatting function for Task 38
 // Includes: title, message, code snippet (if available), and solution
 let formatWithContext = (error: t): string => {
   let template = getTemplate(error.code)

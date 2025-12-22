@@ -17,30 +17,30 @@
  * - "[ ] Subscribe" -> Checkbox(checked=false, label="Subscribe")
  * - "[x]" -> Checkbox(checked=true, label="")
  */
+// Pattern for detecting checkboxes (used in canParse)
+let checkedTestPattern = %re("/\[x\]/i")
+let uncheckedTestPattern = %re("/\[\s*\]/")
+
+// Patterns for parsing (capturing label)
+let checkedParsePattern = %re("/^\[x\]\s*(.*)/i")
+let uncheckedParsePattern = %re("/^\[\s*\]\s*(.*)/")
+
 let make = (): ElementParser.elementParser => {
   ElementParser.make(
     ~priority=85,
     ~canParse=content => {
       // Match either [x] or [ ] patterns
-      let checkedPattern = %re("/\[x\]/i")
-      let uncheckedPattern = %re("/\[\s*\]/")
-
-      Js.Re.test_(checkedPattern, content) || Js.Re.test_(uncheckedPattern, content)
+      checkedTestPattern->RegExp.test(content) || uncheckedTestPattern->RegExp.test(content)
     },
     ~parse=(content, position, _bounds) => {
       let trimmed = content->String.trim
 
       // Try to match checked checkbox [x]
-      let checkedPattern = %re("/^\[x\]\s*(.*)/i")
-      switch Js.Re.exec_(checkedPattern, trimmed) {
+      switch checkedParsePattern->RegExp.exec(trimmed) {
       | Some(result) => {
-          let captures = Js.Re.captures(result)
-          let label = switch captures[1] {
-          | Some(labelCapture) =>
-              labelCapture
-              ->Js.Nullable.toOption
-              ->Belt.Option.getWithDefault("")
-              ->String.trim
+          let matches = result->RegExp.Result.matches
+          let label = switch matches[0] {
+          | Some(labelStr) => labelStr->String.trim
           | None => ""
           }
 
@@ -54,16 +54,11 @@ let make = (): ElementParser.elementParser => {
         }
       | None => {
           // Try to match unchecked checkbox [ ]
-          let uncheckedPattern = %re("/^\[\s*\]\s*(.*)/")
-          switch Js.Re.exec_(uncheckedPattern, trimmed) {
+          switch uncheckedParsePattern->RegExp.exec(trimmed) {
           | Some(result) => {
-              let captures = Js.Re.captures(result)
-              let label = switch captures[1] {
-              | Some(labelCapture) =>
-                  labelCapture
-                  ->Js.Nullable.toOption
-                  ->Belt.Option.getWithDefault("")
-                  ->String.trim
+              let matches = result->RegExp.Result.matches
+              let label = switch matches[0] {
+              | Some(labelStr) => labelStr->String.trim
               | None => ""
               }
 

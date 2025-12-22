@@ -1,100 +1,106 @@
 // ASTBuilder_test.res
 // Unit tests for AST Builder module
 
-open Jest
-open Expect
+open Vitest
 
-describe("ASTBuilder", () => {
-  describe("buildScene", () => {
-    test("builds scene with all fields provided", () => {
+let pass = ()
+
+describe("ASTBuilder", t => {
+  describe("buildScene", t => {
+    test("builds scene with all fields provided", t => {
       let config = {
         ASTBuilder.id: "login",
         title: Some("Login Page"),
         transition: Some("slide"),
         elements: [],
-        position: Position.make(1, 0),
+        position: Types.Position.make(1, 0),
+        device: Some(Types.Desktop),
       }
 
       let result = ASTBuilder.buildScene(config)
 
       switch result {
       | Ok(scene) => {
-          expect(scene.id)->toBe("login")
-          expect(scene.title)->toBe("Login Page")
-          expect(scene.transition)->toBe("slide")
-          expect(Array.length(scene.elements))->toBe(0)
+          t->expect(scene.id)->Expect.toBe("login")
+          t->expect(scene.title)->Expect.toBe("Login Page")
+          t->expect(scene.transition)->Expect.toBe("slide")
+          t->expect(Array.length(scene.elements))->Expect.toBe(0)
         }
-      | Error(_) => fail("Expected successful scene build")
+      | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful scene build
       }
     })
 
-    test("derives title from ID when title not provided", () => {
+    test("derives title from ID when title not provided", t => {
       let config = {
         ASTBuilder.id: "login-page",
         title: None,
         transition: None,
         elements: [],
-        position: Position.make(1, 0),
+        position: Types.Position.make(1, 0),
+        device: Some(Types.Desktop),
       }
 
       let result = ASTBuilder.buildScene(config)
 
       switch result {
       | Ok(scene) => {
-          expect(scene.id)->toBe("login-page")
-          expect(scene.title)->toBe("Login Page")
+          t->expect(scene.id)->Expect.toBe("login-page")
+          t->expect(scene.title)->Expect.toBe("Login Page")
         }
-      | Error(_) => fail("Expected successful scene build")
+      | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful scene build
       }
     })
 
-    test("uses default transition when not provided", () => {
+    test("uses default transition when not provided", t => {
       let config = {
         ASTBuilder.id: "home",
         title: Some("Home"),
         transition: None,
         elements: [],
-        position: Position.make(1, 0),
+        position: Types.Position.make(1, 0),
+        device: Some(Types.Desktop),
       }
 
       let result = ASTBuilder.buildScene(config)
 
       switch result {
       | Ok(scene) => {
-          expect(scene.transition)->toBe("none")
+          t->expect(scene.transition)->Expect.toBe("none")
         }
-      | Error(_) => fail("Expected successful scene build")
+      | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful scene build
       }
     })
 
-    test("rejects empty scene ID", () => {
+    test("rejects empty scene ID", t => {
       let config = {
         ASTBuilder.id: "",
         title: Some("Empty ID"),
         transition: None,
         elements: [],
-        position: Position.make(1, 0),
+        position: Types.Position.make(1, 0),
+        device: Some(Types.Desktop),
       }
 
       let result = ASTBuilder.buildScene(config)
 
       switch result {
-      | Ok(_) => fail("Expected error for empty scene ID")
+      | Ok(_) => t->expect(true)->Expect.toBe(false) // fail: Expected error for empty scene ID
       | Error(ASTBuilder.EmptySceneId(_)) => pass
-      | Error(_) => fail("Expected EmptySceneId error")
+      | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected EmptySceneId error
       }
     })
   })
 
-  describe("buildAST", () => {
-    test("builds AST with single scene", () => {
+  describe("buildAST", t => {
+    test("builds AST with single scene", t => {
       let configs = [
         {
           ASTBuilder.id: "home",
           title: Some("Home"),
           transition: Some("fade"),
           elements: [],
-          position: Position.make(1, 0),
+          position: Types.Position.make(1, 0),
+          device: Some(Types.Desktop),
         },
       ]
 
@@ -102,81 +108,85 @@ describe("ASTBuilder", () => {
 
       switch result {
       | Ok(ast) => {
-          expect(Array.length(ast.scenes))->toBe(1)
+          t->expect(Array.length(ast.scenes))->Expect.toBe(1)
         }
-      | Error(_) => fail("Expected successful AST build")
+      | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful AST build
       }
     })
 
-    test("detects duplicate scene IDs", () => {
+    test("detects duplicate scene IDs", t => {
       let configs = [
         {
           ASTBuilder.id: "home",
           title: Some("Home"),
           transition: None,
           elements: [],
-          position: Position.make(1, 0),
+          position: Types.Position.make(1, 0),
+          device: Some(Types.Desktop),
         },
         {
           ASTBuilder.id: "home",
           title: Some("Home Again"),
           transition: None,
           elements: [],
-          position: Position.make(20, 0),
+          position: Types.Position.make(20, 0),
+          device: Some(Types.Desktop),
         },
       ]
 
       let result = ASTBuilder.buildAST(configs)
 
       switch result {
-      | Ok(_) => fail("Expected error for duplicate scene IDs")
+      | Ok(_) => t->expect(true)->Expect.toBe(false) // fail: Expected error for duplicate scene IDs
       | Error(errors) => {
-          expect(Array.length(errors))->toBeGreaterThan(0)
+          t->expect(Array.length(errors))->Expect.Int.toBeGreaterThan(0)
         }
       }
     })
   })
 
-  describe("helper functions", () => {
+  describe("helper functions", t => {
     let testAST = {
       Types.scenes: [
         {
           id: "home",
           title: "Home",
           transition: "none",
+          device: Types.Desktop,
           elements: [],
         },
         {
           id: "about",
           title: "About",
           transition: "fade",
+          device: Types.Desktop,
           elements: [],
         },
       ],
     }
 
-    test("getSceneById finds existing scene", () => {
+    test("getSceneById finds existing scene", t => {
       let scene = ASTBuilder.getSceneById(testAST, "about")
 
       switch scene {
       | Some(s) => {
-          expect(s.id)->toBe("about")
-          expect(s.title)->toBe("About")
+          t->expect(s.id)->Expect.toBe("about")
+          t->expect(s.title)->Expect.toBe("About")
         }
-      | None => fail("Expected to find scene")
+      | None => t->expect(true)->Expect.toBe(false) // fail: Expected to find scene
       }
     })
 
-    test("hasScene returns true for existing scene", () => {
+    test("hasScene returns true for existing scene", t => {
       let exists = ASTBuilder.hasScene(testAST, "home")
 
-      expect(exists)->toBe(true)
+      t->expect(exists)->Expect.toBe(true)
     })
 
-    test("getSceneIds returns all scene IDs", () => {
+    test("getSceneIds returns all scene IDs", t => {
       let ids = ASTBuilder.getSceneIds(testAST)
 
-      expect(Array.length(ids))->toBe(2)
+      t->expect(Array.length(ids))->Expect.toBe(2)
     })
   })
 })
