@@ -1,5 +1,5 @@
 {
-  "name": "wyreframe-parser",
+  "name": "wyreframe",
   "sources": [
     {"dir": "src", "subdirs": true}
   ],

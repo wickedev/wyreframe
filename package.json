@@ -2,10 +2,24 @@
   "name": "wyreframe",
   "version": "0.1.0",
   "description": "ASCII wireframe + interaction DSL to HTML converter with scene transitions",
+  "author": "wickedev",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/wickedev/wyreframe.git"
+  },
   "type": "module",
   "main": "dist/index.js",
   "module": "dist/index.js",
   "types": "dist/index.d.ts",
+  "files": [
+    "dist",
+    "src/parser/**/*.mjs",
+    "src/parser/**/*.gen.tsx",
+    "src/renderer/**/*.mjs",
+    "src/renderer/**/*.gen.tsx",
+    "!src/**/__tests__",
+    "README.md"
+  ],
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
