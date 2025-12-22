@@ -556,3 +556,81 @@ let toHTMLString = (_ast: ast, _options: option<renderOptions>): string => {
   "<!-- Static HTML generation not yet implemented -->"
 }
 
+// ============================================================================
+// createUI - Convenience Functions
+// ============================================================================
+
+/**
+ * Result type for createUI function.
+ * Contains either success with rendered elements or error with parse errors.
+ */
+type createUISuccessResult = {
+  root: DomBindings.element,
+  sceneManager: sceneManager,
+  ast: Types.ast,
+}
+
+type createUIResult = result<createUISuccessResult, array<ErrorTypes.t>>
+
+/**
+ * Parse and render wireframe in one step.
+ * Combines Parser.parse() and Renderer.render() for convenience.
+ *
+ * @param text Text containing ASCII wireframe and/or interaction DSL
+ * @param options Optional render options
+ * @returns Result containing root element, scene manager, and AST, or errors
+ *
+ * @example
+ * ```rescript
+ * let result = Renderer.createUI(wireframeText, None)
+ * switch result {
+ * | Ok({root, sceneManager, ast}) => {
+ *     // Append root to DOM
+ *     sceneManager.goto("login")
+ *   }
+ * | Error(errors) => Console.error(errors)
+ * }
+ * ```
+ */
+@genType
+let createUI = (text: string, options: option<renderOptions>): createUIResult => {
+  switch Parser.parse(text) {
+  | Ok(ast) => {
+      let {root, sceneManager} = render(ast, options)
+      Ok({root, sceneManager, ast})
+    }
+  | Error(errors) => Error(errors)
+  }
+}
+
+/**
+ * Parse and render wireframe, throwing on error.
+ * Use this for simpler code when parsing is expected to succeed.
+ *
+ * @param text Text containing ASCII wireframe and/or interaction DSL
+ * @param options Optional render options
+ * @returns Rendered root element, scene manager, and AST
+ * @raises Js.Exn.Error if parsing fails
+ *
+ * @example
+ * ```rescript
+ * let {root, sceneManager, ast} = Renderer.createUIOrThrow(wireframeText, None)
+ * // Use root directly - errors will throw exception
+ * ```
+ */
+@genType
+let createUIOrThrow = (text: string, options: option<renderOptions>): createUISuccessResult => {
+  switch Parser.parse(text) {
+  | Ok(ast) => {
+      let {root, sceneManager} = render(ast, options)
+      {root, sceneManager, ast}
+    }
+  | Error(errors) => {
+      let messages = errors
+        ->Array.map(err => ErrorMessages.getTitle(err.code))
+        ->Array.join("\n")
+      JsError.throwWithMessage("Parse failed:\n" ++ messages)
+    }
+  }
+}
+

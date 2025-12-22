@@ -52,6 +52,36 @@ if (result.success) {
 }
 ```
 
+### ReScript
+
+```rescript
+let ui = `
+@scene: login
+
++---------------------------+
+|       'WYREFRAME'         |
+|  +---------------------+  |
+|  | #email              |  |
+|  +---------------------+  |
+|       [ Login ]           |
++---------------------------+
+
+#email:
+  placeholder: "Enter your email"
+
+[Login]:
+  @click -> goto(dashboard, slide-left)
+`
+
+switch Renderer.createUI(ui, None) {
+| Ok({root, sceneManager, _}) => {
+    // Append root to DOM
+    sceneManager.goto("login")
+  }
+| Error(errors) => Console.error(errors)
+}
+```
+
 ## Syntax Summary
 
 | Syntax | Description | Example |
@@ -65,6 +95,8 @@ if (result.success) {
 | `---` | Scene separator | Multi-scene |
 
 ## API
+
+### JavaScript/TypeScript
 
 ```javascript
 import { parse, render, createUI, createUIOrThrow } from 'wyreframe';
@@ -82,12 +114,34 @@ const result = createUI(text);
 const { root, sceneManager } = createUIOrThrow(text);
 ```
 
+### ReScript
+
+```rescript
+// Parse only
+let result = Parser.parse(text)
+
+// Render only
+let {root, sceneManager} = Renderer.render(ast, None)
+
+// Parse + Render (recommended)
+let result = Renderer.createUI(text, None)
+
+// Throw on error
+let {root, sceneManager, ast} = Renderer.createUIOrThrow(text, None)
+```
+
 ### SceneManager
 
 ```javascript
 sceneManager.goto('dashboard');           // Navigate to scene
 sceneManager.getCurrentScene();           // Get current scene
 sceneManager.getSceneIds();               // Get all scene IDs
+```
+
+```rescript
+sceneManager.goto("dashboard")            // Navigate to scene
+sceneManager.getCurrentScene()            // Get current scene (option<string>)
+sceneManager.getSceneIds()                // Get all scene IDs (array<string>)
 ```
 
 ## Interactions
