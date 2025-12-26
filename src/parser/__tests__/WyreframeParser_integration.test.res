@@ -988,23 +988,24 @@ describe("E2E-12: Handle Mixed Valid and Invalid Boxes", t => {
 // E2E-13: Line Number Offset Correction (Issue #5)
 // =============================================================================
 
-describe("E2E-13: Line number offset in warnings with scene directives", _t => {
+describe("E2E-13: Line number offset in warnings with scene directives (Issue #5, #9)", _t => {
   test("should report correct line number for misaligned closing border", t => {
-    // This wireframe has:
+    // This wireframe has a DELIBERATE misalignment on Line 5:
     // Line 1: @scene: login (directive, stripped)
     // Line 2: (empty)
-    // Line 3: +---...+ (box top)
-    // Line 4: |...| (properly aligned)
-    // Line 5: |...'Welcome Back'...| (MISALIGNED - pipe at wrong column)
-    // Line 6: +---...+ (box bottom)
+    // Line 3: +----------------------+ (box top, 24 chars)
+    // Line 4: |                      | (properly aligned, 24 chars)
+    // Line 5: |   Welcome Back      | (MISALIGNED - 23 chars, closing | at wrong column)
+    // Line 6: +----------------------+ (box bottom, 24 chars)
     //
-    // The warning should report Line 5, not Line 3 (which would be grid row 2)
+    // The warning should report position.row = 4 (0-indexed), which is Line 5 (1-indexed)
+    // NOT row 3 (which would be Line 4 without proper offset adjustment)
     let wireframe = `@scene: login
 
-+---------------------------------------+
-|                                       |
-|            'Welcome Back'            |
-+---------------------------------------+`
++----------------------+
+|                      |
+|   Welcome Back      |
++----------------------+`
 
     let result = Parser.parse(wireframe)
 
@@ -1018,33 +1019,34 @@ describe("E2E-13: Line number offset in warnings with scene directives", _t => {
           }
         })
 
-        if Array.length(misalignedWarnings) > 0 {
-          // Get the first warning and check its line number
-          switch misalignedWarnings->Array.get(0) {
-          | Some(warning) => {
-              switch warning.code {
-              | ErrorTypes.MisalignedClosingBorder({position, _}) => {
-                  // Position.row is 0-indexed, so row 4 = line 5
-                  // With the fix, the warning should report the correct file line
-                  // Original file line 5 = grid row 2 (after 2 lines stripped) + offset 2 = row 4
-                  // So position.row should be 4 (0-indexed), which is Line 5 (1-indexed)
-                  t->expect(position.row)->Expect.toBe(4)
-                }
-              | _ => pass
+        // We MUST have a misaligned warning for this test to be valid
+        t->expect(Array.length(misalignedWarnings))->Expect.toBe(1)
+
+        // Verify the line number is correct
+        switch misalignedWarnings->Array.get(0) {
+        | Some(warning) => {
+            switch warning.code {
+            | ErrorTypes.MisalignedClosingBorder({position, _}) => {
+                // Position.row is 0-indexed:
+                // - Line 1 (0-idx 0): @scene: login - directive, stripped
+                // - Line 2 (0-idx 1): empty - first content line, lineOffset = 1
+                // - Line 3 (0-idx 2): +---+ - grid row 1 (bounds.top)
+                // - Line 4 (0-idx 3): |...| - grid row 2
+                // - Line 5 (0-idx 4): misaligned - grid row 3
+                // - Line 6 (0-idx 5): +---+ - grid row 4 (bounds.bottom)
+                //
+                // Grid row 3 + lineOffset 1 = row 4 (0-indexed)
+                // Which is Line 5 (1-indexed)
+                t->expect(position.row)->Expect.toBe(4)
               }
+            | _ => t->expect(true)->Expect.toBe(false) // Should not reach here
             }
-          | None => pass
           }
-        } else {
-          // No misaligned warning found - this is also a valid outcome
-          // if the test wireframe happens to be aligned
-          pass
+        | None => t->expect(true)->Expect.toBe(false) // Should not reach here
         }
       }
     | Error(_) => {
-        // If there are errors, the test should still pass as long as
-        // we're not crashing
-        pass
+        t->expect(true)->Expect.toBe(false) // fail: Expected successful parse with warning
       }
     }
   })
