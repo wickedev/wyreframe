@@ -77,13 +77,17 @@ let replaceCharAt = (str: string, col: int, char: string): string => {
  *
  * Before: |  content   |   (pipe at wrong column)
  * After:  | content    |  (pipe at correct column)
+ *
+ * Note: position.row is 1-indexed (from error messages), convert to 0-indexed for array access
  */
 let fixMisalignedPipe = (text: string, error: ErrorTypes.t): option<(string, fixedIssue)> => {
   switch error.code {
   | MisalignedPipe({position, expectedCol, actualCol}) => {
       let lines = splitLines(text)
+      // Convert 1-indexed row to 0-indexed for array access
+      let rowIndex = position.row - 1
 
-      switch getLine(lines, position.row) {
+      switch getLine(lines, rowIndex) {
       | None => None
       | Some(line) => {
           // Calculate how many spaces to add or remove
@@ -94,7 +98,7 @@ let fixMisalignedPipe = (text: string, error: ErrorTypes.t): option<(string, fix
             insertAt(line, actualCol, String.repeat(" ", diff))
           } else {
             // Need to remove spaces before the pipe
-            let removeCount = Js.Math.abs_int(diff)
+            let removeCount = Math.Int.abs(diff)
             // Make sure we're removing spaces, not content
             let beforePipe = line->String.slice(~start=actualCol + diff, ~end=actualCol)
             if beforePipe->String.trim === "" {
@@ -105,15 +109,15 @@ let fixMisalignedPipe = (text: string, error: ErrorTypes.t): option<(string, fix
           }
 
           if newLine !== line {
-            let newLines = replaceLine(lines, position.row, newLine)
+            let newLines = replaceLine(lines, rowIndex, newLine)
             let fixedText = joinLines(newLines)
 
             Some((
               fixedText,
               {
                 original: error,
-                description: `Aligned pipe at line ${Int.toString(position.row + 1)} to column ${Int.toString(expectedCol + 1)}`,
-                line: position.row + 1,
+                description: `Aligned pipe at line ${Int.toString(position.row)} to column ${Int.toString(expectedCol + 1)}`,
+                line: position.row,
                 column: expectedCol + 1,
               },
             ))
@@ -129,13 +133,17 @@ let fixMisalignedPipe = (text: string, error: ErrorTypes.t): option<(string, fix
 
 /**
  * Fix MisalignedClosingBorder - adjust closing '|' position
+ *
+ * Note: position.row is 1-indexed (from error messages), convert to 0-indexed for array access
  */
 let fixMisalignedClosingBorder = (text: string, error: ErrorTypes.t): option<(string, fixedIssue)> => {
   switch error.code {
   | MisalignedClosingBorder({position, expectedCol, actualCol}) => {
       let lines = splitLines(text)
+      // Convert 1-indexed row to 0-indexed for array access
+      let rowIndex = position.row - 1
 
-      switch getLine(lines, position.row) {
+      switch getLine(lines, rowIndex) {
       | None => None
       | Some(line) => {
           let diff = expectedCol - actualCol
@@ -145,7 +153,7 @@ let fixMisalignedClosingBorder = (text: string, error: ErrorTypes.t): option<(st
             insertAt(line, actualCol, String.repeat(" ", diff))
           } else {
             // Need to remove spaces before the closing pipe
-            let removeCount = Js.Math.abs_int(diff)
+            let removeCount = Math.Int.abs(diff)
             let beforePipe = line->String.slice(~start=actualCol + diff, ~end=actualCol)
             if beforePipe->String.trim === "" {
               removeAt(line, actualCol + diff, removeCount)
@@ -155,15 +163,15 @@ let fixMisalignedClosingBorder = (text: string, error: ErrorTypes.t): option<(st
           }
 
           if newLine !== line {
-            let newLines = replaceLine(lines, position.row, newLine)
+            let newLines = replaceLine(lines, rowIndex, newLine)
             let fixedText = joinLines(newLines)
 
             Some((
               fixedText,
               {
                 original: error,
-                description: `Aligned closing border at line ${Int.toString(position.row + 1)} to column ${Int.toString(expectedCol + 1)}`,
-                line: position.row + 1,
+                description: `Aligned closing border at line ${Int.toString(position.row)} to column ${Int.toString(expectedCol + 1)}`,
+                line: position.row,
                 column: expectedCol + 1,
               },
             ))
@@ -179,6 +187,8 @@ let fixMisalignedClosingBorder = (text: string, error: ErrorTypes.t): option<(st
 
 /**
  * Fix UnusualSpacing - replace tabs with spaces
+ *
+ * Note: position.row is 1-indexed (from error messages), convert to 0-indexed for array access
  */
 let fixUnusualSpacing = (text: string, error: ErrorTypes.t): option<(string, fixedIssue)> => {
   switch error.code {
@@ -186,23 +196,25 @@ let fixUnusualSpacing = (text: string, error: ErrorTypes.t): option<(string, fix
       // Check if the issue is about tabs
       if issue->String.includes("tab") || issue->String.includes("Tab") {
         let lines = splitLines(text)
+        // Convert 1-indexed row to 0-indexed for array access
+        let rowIndex = position.row - 1
 
-        switch getLine(lines, position.row) {
+        switch getLine(lines, rowIndex) {
         | None => None
         | Some(line) => {
             // Replace tabs with 2 spaces (common convention)
             let newLine = line->String.replaceAll("\t", "  ")
 
             if newLine !== line {
-              let newLines = replaceLine(lines, position.row, newLine)
+              let newLines = replaceLine(lines, rowIndex, newLine)
               let fixedText = joinLines(newLines)
 
               Some((
                 fixedText,
                 {
                   original: error,
-                  description: `Replaced tabs with spaces at line ${Int.toString(position.row + 1)}`,
-                  line: position.row + 1,
+                  description: `Replaced tabs with spaces at line ${Int.toString(position.row)}`,
+                  line: position.row,
                   column: position.col + 1,
                 },
               ))
@@ -221,13 +233,17 @@ let fixUnusualSpacing = (text: string, error: ErrorTypes.t): option<(string, fix
 
 /**
  * Fix UnclosedBracket - add closing ']' at end of line
+ *
+ * Note: opening.row is 1-indexed (from error messages), convert to 0-indexed for array access
  */
 let fixUnclosedBracket = (text: string, error: ErrorTypes.t): option<(string, fixedIssue)> => {
   switch error.code {
   | UnclosedBracket({opening}) => {
       let lines = splitLines(text)
+      // Convert 1-indexed row to 0-indexed for array access
+      let rowIndex = opening.row - 1
 
-      switch getLine(lines, opening.row) {
+      switch getLine(lines, rowIndex) {
       | None => None
       | Some(line) => {
           // Find the content after '[' and close it
@@ -237,15 +253,15 @@ let fixUnclosedBracket = (text: string, error: ErrorTypes.t): option<(string, fi
           if !(trimmedLine->String.endsWith("]")) {
             // Add ' ]' with proper spacing
             let newLine = trimmedLine ++ " ]"
-            let newLines = replaceLine(lines, opening.row, newLine)
+            let newLines = replaceLine(lines, rowIndex, newLine)
             let fixedText = joinLines(newLines)
 
             Some((
               fixedText,
               {
                 original: error,
-                description: `Added closing bracket at line ${Int.toString(opening.row + 1)}`,
-                line: opening.row + 1,
+                description: `Added closing bracket at line ${Int.toString(opening.row)}`,
+                line: opening.row,
                 column: String.length(trimmedLine) + 2,
               },
             ))
@@ -261,18 +277,23 @@ let fixUnclosedBracket = (text: string, error: ErrorTypes.t): option<(string, fi
 
 /**
  * Fix MismatchedWidth - extend the shorter border to match the longer one
+ *
+ * Note: topLeft.row is 1-indexed (from error messages), convert to 0-indexed for array access
  */
 let fixMismatchedWidth = (text: string, error: ErrorTypes.t): option<(string, fixedIssue)> => {
   switch error.code {
   | MismatchedWidth({topLeft, topWidth, bottomWidth}) => {
       let lines = splitLines(text)
       let diff = topWidth - bottomWidth
+      // Convert 1-indexed row to 0-indexed for array access
+      let topLeftRowIndex = topLeft.row - 1
 
       if diff === 0 {
         None
       } else {
         // Find the bottom border line
         // We need to trace down from topLeft to find the bottom
+        // Note: row here is 0-indexed array index
         let rec findBottomRow = (row: int): option<int> => {
           if row >= Array.length(lines) {
             None
@@ -284,7 +305,7 @@ let fixMismatchedWidth = (text: string, error: ErrorTypes.t): option<(string, fi
                 let col = topLeft.col
                 if col < String.length(line) {
                   let char = line->String.charAt(col)
-                  if char === "+" && row > topLeft.row {
+                  if char === "+" && row > topLeftRowIndex {
                     Some(row)
                   } else {
                     findBottomRow(row + 1)
@@ -297,10 +318,10 @@ let fixMismatchedWidth = (text: string, error: ErrorTypes.t): option<(string, fi
           }
         }
 
-        switch findBottomRow(topLeft.row + 1) {
+        switch findBottomRow(topLeftRowIndex + 1) {
         | None => None
-        | Some(bottomRow) => {
-            switch getLine(lines, bottomRow) {
+        | Some(bottomRowIndex) => {
+            switch getLine(lines, bottomRowIndex) {
             | None => None
             | Some(bottomLine) => {
                 if diff > 0 {
@@ -313,15 +334,15 @@ let fixMismatchedWidth = (text: string, error: ErrorTypes.t): option<(string, fi
                     let dashes = String.repeat("-", diff)
                     let newLine = before ++ dashes ++ after
 
-                    let newLines = replaceLine(lines, bottomRow, newLine)
+                    let newLines = replaceLine(lines, bottomRowIndex, newLine)
                     let fixedText = joinLines(newLines)
 
                     Some((
                       fixedText,
                       {
                         original: error,
-                        description: `Extended bottom border at line ${Int.toString(bottomRow + 1)} by ${Int.toString(diff)} characters`,
-                        line: bottomRow + 1,
+                        description: `Extended bottom border at line ${Int.toString(bottomRowIndex + 1)} by ${Int.toString(diff)} characters`,
+                        line: bottomRowIndex + 1,
                         column: closingPlusCol + 1,
                       },
                     ))
@@ -332,25 +353,25 @@ let fixMismatchedWidth = (text: string, error: ErrorTypes.t): option<(string, fi
                   // Top is shorter, need to extend it
                   // This is trickier as it affects content alignment
                   // For now, we extend the top border
-                  switch getLine(lines, topLeft.row) {
+                  switch getLine(lines, topLeftRowIndex) {
                   | None => None
                   | Some(topLine) => {
                       let closingPlusCol = topLeft.col + topWidth - 1
                       if closingPlusCol >= 0 && closingPlusCol < String.length(topLine) {
                         let before = topLine->String.slice(~start=0, ~end=closingPlusCol)
                         let after = topLine->String.sliceToEnd(~start=closingPlusCol)
-                        let dashes = String.repeat("-", Js.Math.abs_int(diff))
+                        let dashes = String.repeat("-", Math.Int.abs(diff))
                         let newLine = before ++ dashes ++ after
 
-                        let newLines = replaceLine(lines, topLeft.row, newLine)
+                        let newLines = replaceLine(lines, topLeftRowIndex, newLine)
                         let fixedText = joinLines(newLines)
 
                         Some((
                           fixedText,
                           {
                             original: error,
-                            description: `Extended top border at line ${Int.toString(topLeft.row + 1)} by ${Int.toString(Js.Math.abs_int(diff))} characters`,
-                            line: topLeft.row + 1,
+                            description: `Extended top border at line ${Int.toString(topLeft.row)} by ${Int.toString(Math.Int.abs(diff))} characters`,
+                            line: topLeft.row,
                             column: closingPlusCol + 1,
                           },
                         ))

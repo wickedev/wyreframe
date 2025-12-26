@@ -111,8 +111,8 @@ type renderResult = {
 let defaultStyles = `
   .wf-app { font-family: monospace; position: relative; overflow: hidden; background: #fff; color: #333; font-size: 14px; margin: 0 auto; }
   .wf-app.wf-device-desktop { width: 1440px; height: 900px; max-width: 100%; aspect-ratio: 16/10; }
-  .wf-app.wf-device-laptop { width: 1280px; height: 800px; max-width: 100%; aspect-ratio: 16/10; }
-  .wf-app.wf-device-tablet { width: 768px; height: 1024px; max-width: 100%; aspect-ratio: 3/4; }
+  .wf-app.wf-device-laptop { width: 1280px; height: 773px; max-width: 100%; aspect-ratio: 16/10; }
+  .wf-app.wf-device-tablet { width: 768px; height: 1064px; max-width: 100%; aspect-ratio: 3/4; }
   .wf-app.wf-device-tablet-landscape { width: 1024px; height: 768px; max-width: 100%; aspect-ratio: 4/3; }
   .wf-app.wf-device-mobile { width: 375px; height: 812px; max-width: 100%; aspect-ratio: 375/812; }
   .wf-app.wf-device-mobile-landscape { width: 812px; height: 375px; max-width: 100%; aspect-ratio: 812/375; }
