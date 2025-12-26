@@ -49,6 +49,14 @@ module DomBindings = {
 // ============================================================================
 
 /**
+ * Scene change callback type.
+ * Called when navigating between scenes.
+ * @param fromScene The scene ID navigating from (None if initial)
+ * @param toScene The scene ID navigating to
+ */
+type onSceneChangeCallback = (option<string>, string) => unit
+
+/**
  * Configuration for the rendering process.
  */
 type renderOptions = {
@@ -56,6 +64,7 @@ type renderOptions = {
   interactive: bool,
   injectStyles: bool,
   containerClass: option<string>,
+  onSceneChange: option<onSceneChangeCallback>,
 }
 
 /**
@@ -66,6 +75,7 @@ let defaultOptions: renderOptions = {
   interactive: true,
   injectStyles: true,
   containerClass: None,
+  onSceneChange: None,
 }
 
 // ============================================================================
@@ -418,14 +428,27 @@ let renderScene = (scene: scene, ~onAction: option<actionHandler>=?): DomBinding
 // Scene Manager Implementation
 // ============================================================================
 
-let createSceneManager = (scenes: Map.t<string, DomBindings.element>): sceneManager => {
+let createSceneManager = (
+  scenes: Map.t<string, DomBindings.element>,
+  ~onSceneChange: option<onSceneChangeCallback>=?,
+): sceneManager => {
   let currentScene = ref(None)
   let historyStack: ref<array<string>> = ref([])
   let forwardStack: ref<array<string>> = ref([])
 
+  // Helper to call onSceneChange callback if provided
+  let notifySceneChange = (fromScene: option<string>, toScene: string): unit => {
+    switch onSceneChange {
+    | Some(callback) => callback(fromScene, toScene)
+    | None => ()
+    }
+  }
+
   // Internal function to switch scenes without affecting history
-  let switchToScene = (id: string): unit => {
-    switch currentScene.contents {
+  let switchToScene = (id: string, ~notify: bool=true): unit => {
+    let previousScene = currentScene.contents
+
+    switch previousScene {
     | Some(currentId) => {
         switch scenes->Map.get(currentId) {
         | Some(el) => el->DomBindings.classList->DomBindings.remove("active")
@@ -439,6 +462,13 @@ let createSceneManager = (scenes: Map.t<string, DomBindings.element>): sceneMana
     | Some(el) => {
         el->DomBindings.classList->DomBindings.add("active")
         currentScene := Some(id)
+        // Notify callback if enabled and scene actually changed
+        if notify {
+          switch previousScene {
+          | Some(prevId) if prevId == id => () // Same scene, no notification
+          | _ => notifySceneChange(previousScene, id)
+          }
+        }
       }
     | None => ()
     }
@@ -634,7 +664,7 @@ let render = (ast: ast, options: option<renderOptions>): renderResult => {
     sceneMap->Map.set(scene.id, sceneEl)
   })
 
-  let manager = createSceneManager(sceneMap)
+  let manager = createSceneManager(sceneMap, ~onSceneChange=?opts.onSceneChange)
 
   // Now that sceneManager is created, set the refs
   gotoRef := Some(manager.goto)

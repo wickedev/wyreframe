@@ -146,6 +146,9 @@ export interface SceneManager {
   getSceneIds: () => string[];
 }
 
+/** Scene change callback type */
+export type OnSceneChangeCallback = (fromScene: string | undefined, toScene: string) => void;
+
 /** Render options */
 export interface RenderOptions {
   /** Theme name */
@@ -156,6 +159,13 @@ export interface RenderOptions {
   injectStyles?: boolean;
   /** Additional CSS class for container */
   containerClass?: string;
+  /**
+   * Callback fired when navigating between scenes.
+   * Useful for implementing scene history, analytics, or state synchronization.
+   * @param fromScene - The scene ID navigating from (undefined if initial navigation)
+   * @param toScene - The scene ID navigating to
+   */
+  onSceneChange?: OnSceneChangeCallback;
 }
 
 /** Render result */
