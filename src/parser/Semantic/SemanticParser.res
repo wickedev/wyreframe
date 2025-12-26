@@ -727,6 +727,62 @@ let splitInlineSegments = (line: string): array<inlineSegment> => {
           i := i.contents + 1
         }
       }
+    } else if char === "\"" {
+      // Check for link pattern "..."
+      let linkStart = i.contents
+      let start = i.contents + 1
+      let endPos = ref(None)
+      let j = ref(start)
+      // Find matching closing quote, handling escaped quotes
+      while j.contents < len && endPos.contents === None {
+        let currentChar = line->String.charAt(j.contents)
+        if currentChar === "\"" {
+          // Check if this quote is escaped (preceded by backslash)
+          let isEscaped = j.contents > start && line->String.charAt(j.contents - 1) === "\\"
+          if !isEscaped {
+            endPos := Some(j.contents)
+          }
+        }
+        j := j.contents + 1
+      }
+
+      switch endPos.contents {
+      | Some(end) => {
+          let quotedContent = line->String.slice(~start, ~end)
+          let trimmedContent = quotedContent->String.trim
+
+          // Check if the quoted content is not empty
+          if trimmedContent !== "" {
+            // Flush any accumulated text before the link
+            let text = currentText.contents->String.trim
+            if text !== "" {
+              let leadingSpaces = String.length(currentText.contents) - String.length(currentText.contents->String.trimStart)
+              segments->Array.push(TextSegment(text, currentTextStart.contents + leadingSpaces))->ignore
+            }
+            currentText := ""
+
+            // Add the link segment
+            segments->Array.push(LinkSegment(trimmedContent, linkStart))->ignore
+            i := end + 1
+            currentTextStart := i.contents
+          } else {
+            // Empty quoted content, treat as regular text
+            if currentText.contents === "" {
+              currentTextStart := i.contents
+            }
+            currentText := currentText.contents ++ char
+            i := i.contents + 1
+          }
+        }
+      | None => {
+          // No matching closing quote, treat as regular text
+          if currentText.contents === "" {
+            currentTextStart := i.contents
+          }
+          currentText := currentText.contents ++ char
+          i := i.contents + 1
+        }
+      }
     } else {
       // Regular character
       if currentText.contents === "" {
@@ -965,11 +1021,14 @@ let segmentToElement = (
       let actualCol = baseCol + colOffset
       let position = Position.make(basePosition.row, actualCol)
 
+      // Use the same slugify logic as LinkParser for consistent ID generation
       let id = text
         ->String.trim
         ->String.toLowerCase
         ->Js.String2.replaceByRe(%re("/\\s+/g"), "-")
         ->Js.String2.replaceByRe(%re("/[^a-z0-9-]/g"), "")
+        ->Js.String2.replaceByRe(%re("/-+/g"), "-")
+        ->Js.String2.replaceByRe(%re("/^-+|-+$/g"), "")
 
       let align = AlignmentCalc.calculateWithStrategy(
         text,
@@ -1046,10 +1105,12 @@ let parseContentLine = (
           Some(registry->ParserRegistry.parse(buttonContent, position, box.bounds))
         }
       | Some(LinkSegment(text, colOffset)) => {
-          // For LinkSegment, we also need to account for leading spaces
+          // For single LinkSegment, pass through to ParserRegistry to use LinkParser's slugify
           let actualCol = baseCol + leadingSpaces + colOffset
-          let adjustedPosition = Position.make(basePosition.row, actualCol)
-          Some(segmentToElement(LinkSegment(text, colOffset), adjustedPosition, baseCol + leadingSpaces, box.bounds))
+          let position = Position.make(row, actualCol)
+          // Reconstruct the quoted text format for the parser
+          let linkContent = "\"" ++ text ++ "\""
+          Some(registry->ParserRegistry.parse(linkContent, position, box.bounds))
         }
       | Some(TextSegment(_, _)) | None => {
           // For single text segment, use original position calculation

@@ -251,6 +251,148 @@ describe('onSceneChange callback (Issue #2)', () => {
   });
 });
 
+describe('mixed text and link content (Issue #14)', () => {
+  // Regression test for issue #14: Text before link not rendering in mixed text-link line
+  // When a line contains both plain text and a link (e.g., "Don't have an account? "Sign up""),
+  // both parts should be rendered, not just the link.
+
+  const mixedTextLinkWireframe = `
+@scene: test
+
++---------------------------------------+
+|   Don't have an account? "Sign up"    |
++---------------------------------------+
+`;
+
+  test('parses both text and link from mixed text-link line', () => {
+    const result = parse(mixedTextLinkWireframe);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      expect(result.ast.scenes).toHaveLength(1);
+      const scene = result.ast.scenes[0];
+
+      // Should have elements (likely a Row containing Text and Link)
+      expect(scene.elements.length).toBeGreaterThan(0);
+
+      // Helper to recursively find elements
+      const findElements = (elements: any[], tags: string[]): any[] => {
+        const found: any[] = [];
+        for (const el of elements) {
+          if (tags.includes(el.TAG)) {
+            found.push(el);
+          }
+          if (el.children) {
+            found.push(...findElements(el.children, tags));
+          }
+        }
+        return found;
+      };
+
+      // Find all Text and Link elements
+      const textElements = findElements(scene.elements, ['Text']);
+      const linkElements = findElements(scene.elements, ['Link']);
+
+      // Should have at least one Text element containing "Don't have an account?"
+      const hasAccountText = textElements.some(
+        (t) => t.content && t.content.includes("Don't have an account?")
+      );
+      expect(hasAccountText).toBe(true);
+
+      // Should have the "Sign up" link
+      const hasSignUpLink = linkElements.some((l) => l.text === 'Sign up');
+      expect(hasSignUpLink).toBe(true);
+    }
+  });
+
+  test('parses link at start followed by text', () => {
+    const wireframe = `
+@scene: test
+
++----------------------------+
+|  "Click here" for details  |
++----------------------------+
+`;
+
+    const result = parse(wireframe);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const scene = result.ast.scenes[0];
+
+      const findElements = (elements: any[], tags: string[]): any[] => {
+        const found: any[] = [];
+        for (const el of elements) {
+          if (tags.includes(el.TAG)) {
+            found.push(el);
+          }
+          if (el.children) {
+            found.push(...findElements(el.children, tags));
+          }
+        }
+        return found;
+      };
+
+      const textElements = findElements(scene.elements, ['Text']);
+      const linkElements = findElements(scene.elements, ['Link']);
+
+      // Should have "Click here" link
+      const hasClickHereLink = linkElements.some((l) => l.text === 'Click here');
+      expect(hasClickHereLink).toBe(true);
+
+      // Should have "for details" text
+      const hasDetailsText = textElements.some(
+        (t) => t.content && t.content.includes('for details')
+      );
+      expect(hasDetailsText).toBe(true);
+    }
+  });
+
+  test('parses text with link in middle', () => {
+    const wireframe = `
+@scene: test
+
++------------------------------------+
+|  Please "click here" to continue  |
++------------------------------------+
+`;
+
+    const result = parse(wireframe);
+
+    expect(result.success).toBe(true);
+    if (result.success) {
+      const scene = result.ast.scenes[0];
+
+      const findElements = (elements: any[], tags: string[]): any[] => {
+        const found: any[] = [];
+        for (const el of elements) {
+          if (tags.includes(el.TAG)) {
+            found.push(el);
+          }
+          if (el.children) {
+            found.push(...findElements(el.children, tags));
+          }
+        }
+        return found;
+      };
+
+      const textElements = findElements(scene.elements, ['Text']);
+      const linkElements = findElements(scene.elements, ['Link']);
+
+      // Should have "click here" link
+      expect(linkElements.some((l) => l.text === 'click here')).toBe(true);
+
+      // Should have both text parts
+      const hasPlease = textElements.some((t) => t.content && t.content.includes('Please'));
+      const hasContinue = textElements.some(
+        (t) => t.content && t.content.includes('to continue')
+      );
+      expect(hasPlease).toBe(true);
+      expect(hasContinue).toBe(true);
+    }
+  });
+});
+
 describe('device option override (Issue #11)', () => {
   const desktopWireframe = `
 @scene: test
