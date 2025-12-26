@@ -1,7 +1,7 @@
-# Wyreframe Parser Developer Guide
+# Wyreframe Developer Guide
 
-**Version**: 0.1.0
-**Date**: 2025-12-22
+**Version**: 0.4.3
+**Date**: 2025-12-27
 **Language**: ReScript
 **Target Audience**: Developers extending or maintaining the parser
 
@@ -1176,6 +1176,7 @@ Happy parsing!
 
 ---
 
-**Document Version**: 1.0
-**Last Updated**: 2025-12-22
-**Feedback**: Please submit issues or suggestions to the project repository
+**Document Version**: 0.4.3
+**Last Updated**: 2025-12-27
+**License**: GPL-3.0
+**Feedback**: Please submit issues or suggestions to [GitHub](https://github.com/wickedev/wyreframe/issues)

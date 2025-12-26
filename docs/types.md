@@ -1,8 +1,8 @@
-# Wyreframe Parser Type Reference
+# Wyreframe Type Reference
 
-**Version**: 0.1.0
+**Version**: 0.4.3
 **Language**: ReScript (compiled to JavaScript/TypeScript)
-**Last Updated**: 2025-12-22
+**Last Updated**: 2025-12-27
 
 ## Table of Contents
 
@@ -1329,6 +1329,6 @@ function handleOption<T>(option: Option<T>) {
 
 ---
 
-**Version**: 0.1.0
-**Last Updated**: 2025-12-22
-**License**: MIT
+**Version**: 0.4.3
+**Last Updated**: 2025-12-27
+**License**: GPL-3.0

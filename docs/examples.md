@@ -1,8 +1,11 @@
-# Wyreframe Parser Examples
+# Wyreframe Examples
 
-**Version**: 0.1.0
+**Version**: 0.4.3
 **Language**: TypeScript/ReScript
-**Last Updated**: 2025-12-22
+**Last Updated**: 2025-12-27
+
+> **Note**: This document uses the TypeScript-friendly API with `result.success` pattern.
+> For ReScript, use the pattern matching syntax shown in [API Documentation](./api.md#rescript-api).
 
 ## Table of Contents
 
@@ -23,7 +26,7 @@
 The most basic wireframe with a single box.
 
 ```typescript
-import { parse } from 'wyreframe-parser';
+import { parse } from 'wyreframe';
 
 const wireframe = `
 +--------+
@@ -33,10 +36,9 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const ast = result._0;
-  console.log('Scenes:', ast.scenes.length); // 1
-  console.log('Elements:', ast.scenes[0].elements); // Box with text
+if (result.success) {
+  console.log('Scenes:', result.ast.scenes.length); // 1
+  console.log('Elements:', result.ast.scenes[0].elements); // Box with text
 }
 ```
 
@@ -85,8 +87,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const box = result._0.scenes[0].elements[0];
+if (result.success) {
+  const box = result.ast.scenes[0].elements[0];
   if (box.TAG === 'Box') {
     console.log('Box name:', box.name); // "Login"
   }
@@ -112,8 +114,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const outer = result._0.scenes[0].elements[0];
+if (result.success) {
+  const outer = result.ast.scenes[0].elements[0];
   if (outer.TAG === 'Box') {
     console.log('Outer box name:', outer.name); // "Outer"
     console.log('Children:', outer.children.length); // 1
@@ -144,8 +146,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const box = result._0.scenes[0].elements[0];
+if (result.success) {
+  const box = result.ast.scenes[0].elements[0];
   if (box.TAG === 'Box') {
     box.children.forEach(element => {
       if (element.TAG === 'Button') {
@@ -187,8 +189,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const box = result._0.scenes[0].elements[0];
+if (result.success) {
+  const box = result.ast.scenes[0].elements[0];
   if (box.TAG === 'Box') {
     box.children.forEach(element => {
       if (element.TAG === 'Input') {
@@ -219,8 +221,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const box = result._0.scenes[0].elements[0];
+if (result.success) {
+  const box = result.ast.scenes[0].elements[0];
   if (box.TAG === 'Box') {
     box.children.forEach(element => {
       if (element.TAG === 'Link') {
@@ -251,8 +253,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const box = result._0.scenes[0].elements[0];
+if (result.success) {
+  const box = result.ast.scenes[0].elements[0];
   if (box.TAG === 'Box') {
     box.children.forEach(element => {
       if (element.TAG === 'Checkbox') {
@@ -284,8 +286,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const box = result._0.scenes[0].elements[0];
+if (result.success) {
+  const box = result.ast.scenes[0].elements[0];
   if (box.TAG === 'Box') {
     box.children.forEach(element => {
       if (element.TAG === 'Text') {
@@ -319,8 +321,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const box = result._0.scenes[0].elements[0];
+if (result.success) {
+  const box = result.ast.scenes[0].elements[0];
   if (box.TAG === 'Box') {
     // Dividers create Section elements
     box.children.forEach(element => {
@@ -359,8 +361,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const scene = result._0.scenes[0];
+if (result.success) {
+  const scene = result.ast.scenes[0];
   console.log('Scene ID:', scene.id);           // "login"
   console.log('Scene Title:', scene.title);     // "Login Screen"
   console.log('Transition:', scene.transition); // "fade"
@@ -391,8 +393,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const scene = result._0.scenes[0];
+if (result.success) {
+  const scene = result.ast.scenes[0];
   console.log('Device:', scene.device); // "Mobile"
 }
 ```
@@ -442,8 +444,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Ok') {
-  const ast = result._0;
+if (result.success) {
+  const ast = result.ast;
   console.log('Number of scenes:', ast.scenes.length); // 2
 
   ast.scenes.forEach(scene => {
@@ -479,8 +481,8 @@ const interactions = `
 
 const result = parse(wireframe, interactions);
 
-if (result.TAG === 'Ok') {
-  const ast = result._0;
+if (result.success) {
+  const ast = result.ast;
   const scene = ast.scenes[0];
   const button = scene.elements[0];
 
@@ -525,7 +527,7 @@ const interactions = `
 
 const result = parse(wireframe, interactions);
 
-if (result.TAG === 'Ok') {
+if (result.success) {
   console.log('Wireframe with interactions parsed successfully');
   // Elements now have merged properties and actions
 }
@@ -557,7 +559,7 @@ const interactions = `
 ### Handling Parse Errors
 
 ```typescript
-import { parse, formatError } from 'wyreframe-parser';
+import { parse, formatError } from 'wyreframe';
 
 const wireframe = `
 +--Unclosed--+
@@ -567,8 +569,8 @@ const wireframe = `
 
 const result = parse(wireframe);
 
-if (result.TAG === 'Error') {
-  const errors = result._0;
+if (!result.success) {
+  const errors = result.errors;
 
   console.log(`Found ${errors.length} error(s):`);
 
@@ -604,8 +606,8 @@ Box opened at row 1, column 0 but never closed on the bottom side.
 ```typescript
 const result = parse(wireframe);
 
-if (result.TAG === 'Error') {
-  const errors = result._0;
+if (!result.success) {
+  const errors = result.errors;
 
   const criticalErrors = errors.filter(e => e.severity === 'Error');
   const warnings = errors.filter(e => e.severity === 'Warning');
@@ -636,8 +638,8 @@ if (result.TAG === 'Error') {
 function isValidWireframe(wireframe: string): boolean {
   const result = parse(wireframe);
 
-  if (result.TAG === 'Error') {
-    const criticalErrors = result._0.filter(e => e.severity === 'Error');
+  if (!result.success) {
+    const criticalErrors = result.ast.filter(e => e.severity === 'Error');
     return criticalErrors.length === 0;
   }
 
@@ -679,8 +681,8 @@ function traverseElements(
 
 // Usage
 const result = parse(wireframe);
-if (result.TAG === 'Ok') {
-  const ast = result._0;
+if (result.success) {
+  const ast = result.ast;
 
   ast.scenes.forEach(scene => {
     console.log(`\nScene: ${scene.id}`);
@@ -725,9 +727,9 @@ function findElementsByType<T extends Element['TAG']>(
 
 // Usage
 const result = parse(wireframe);
-if (result.TAG === 'Ok') {
-  const allButtons = findElementsByType(result._0, 'Button');
-  const allInputs = findElementsByType(result._0, 'Input');
+if (result.success) {
+  const allButtons = findElementsByType(result.ast, 'Button');
+  const allInputs = findElementsByType(result.ast, 'Input');
 
   console.log(`Found ${allButtons.length} buttons`);
   console.log(`Found ${allInputs.length} inputs`);
@@ -793,8 +795,8 @@ function astToHTML(ast: AST): string {
 
 // Usage
 const result = parse(wireframe);
-if (result.TAG === 'Ok') {
-  const html = astToHTML(result._0);
+if (result.success) {
+  const html = astToHTML(result.ast);
   console.log(html);
 }
 ```
@@ -858,9 +860,9 @@ const loginInteractions = `
 
 const result = parse(loginWireframe, loginInteractions);
 
-if (result.TAG === 'Ok') {
+if (result.success) {
   console.log('Login form parsed successfully');
-  const html = astToHTML(result._0);
+  const html = astToHTML(result.ast);
   // Render to DOM or save to file
 }
 ```
@@ -900,8 +902,8 @@ const dashboardWireframe = `
 
 const result = parse(dashboardWireframe);
 
-if (result.TAG === 'Ok') {
-  const scene = result._0.scenes[0];
+if (result.success) {
+  const scene = result.ast.scenes[0];
 
   // Find all sections
   traverseElements(scene.elements, (element, depth) => {
@@ -1003,10 +1005,10 @@ const wizardInteractions = `
 
 const result = parse(wizardWireframe, wizardInteractions);
 
-if (result.TAG === 'Ok') {
-  console.log(`Wizard has ${result._0.scenes.length} steps`);
+if (result.success) {
+  console.log(`Wizard has ${result.ast.scenes.length} steps`);
 
-  result._0.scenes.forEach((scene, index) => {
+  result.ast.scenes.forEach((scene, index) => {
     console.log(`Step ${index + 1}: ${scene.title}`);
   });
 }
@@ -1053,13 +1055,13 @@ const settingsWireframe = `
 
 const result = parse(settingsWireframe);
 
-if (result.TAG === 'Ok') {
-  const scene = result._0.scenes[0];
+if (result.success) {
+  const scene = result.ast.scenes[0];
 
   // Count different element types
-  const buttons = findElementsByType(result._0, 'Button');
-  const inputs = findElementsByType(result._0, 'Input');
-  const checkboxes = findElementsByType(result._0, 'Checkbox');
+  const buttons = findElementsByType(result.ast, 'Button');
+  const inputs = findElementsByType(result.ast, 'Input');
+  const checkboxes = findElementsByType(result.ast, 'Checkbox');
 
   console.log('Settings page elements:');
   console.log(`  ${buttons.length} buttons`);
@@ -1076,7 +1078,7 @@ if (result.TAG === 'Ok') {
 
 ```typescript
 import { describe, it, expect } from '@jest/globals';
-import { parse } from 'wyreframe-parser';
+import { parse } from 'wyreframe';
 
 describe('Wyreframe Parser', () => {
   it('should parse a simple button', () => {
@@ -1088,10 +1090,10 @@ describe('Wyreframe Parser', () => {
 
     const result = parse(wireframe);
 
-    expect(result.TAG).toBe('Ok');
+    expect(result.success).toBe(true);
 
-    if (result.TAG === 'Ok') {
-      const box = result._0.scenes[0].elements[0];
+    if (result.success) {
+      const box = result.ast.scenes[0].elements[0];
       expect(box.TAG).toBe('Box');
 
       if (box.TAG === 'Box') {
@@ -1116,11 +1118,11 @@ describe('Wyreframe Parser', () => {
 
     const result = parse(wireframe);
 
-    expect(result.TAG).toBe('Error');
+    expect(result.success).toBe(false);
 
-    if (result.TAG === 'Error') {
-      expect(result._0.length).toBeGreaterThan(0);
-      expect(result._0[0].code.TAG).toBe('UncloseBox');
+    if (!result.success) {
+      expect(result.errors.length).toBeGreaterThan(0);
+      // Error has message property with error details
     }
   });
 
@@ -1135,10 +1137,10 @@ describe('Wyreframe Parser', () => {
 
     const result = parse(wireframe);
 
-    expect(result.TAG).toBe('Ok');
+    expect(result.success).toBe(true);
 
-    if (result.TAG === 'Ok') {
-      const outer = result._0.scenes[0].elements[0];
+    if (result.success) {
+      const outer = result.ast.scenes[0].elements[0];
       expect(outer.TAG).toBe('Box');
 
       if (outer.TAG === 'Box') {
@@ -1193,13 +1195,12 @@ benchmark(largeWireframe, 50);
 
 ## See Also
 
-- [API Documentation](./API.md) - Complete API reference
-- [Type Reference](./TYPES.md) - All type definitions
-- [Migration Guide](./MIGRATION.md) - Migrating from legacy parser
-- [Developer Guide](./DEVELOPER.md) - Extending the parser
+- [API Documentation](./api.md) - Complete API reference
+- [Type Reference](./types.md) - All type definitions
+- [Developer Guide](./developer-guide.md) - Extending the parser
 
 ---
 
-**Version**: 1.0
-**Last Updated**: 2025-12-22
-**License**: MIT
+**Version**: 0.4.3
+**Last Updated**: 2025-12-27
+**License**: GPL-3.0
