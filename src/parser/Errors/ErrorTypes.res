@@ -217,18 +217,21 @@ let adjustCodeLineOffset = (code: errorCode, offset: int): errorCode => {
  * Adjust the line offset in an error's position.
  * Creates a new error with the position adjusted by the given offset.
  *
+ * This function always adds +1 to convert from 0-indexed grid rows
+ * to 1-indexed file line numbers, plus any offset for stripped directive lines.
+ *
  * @param error - The error to adjust
- * @param offset - The number of lines to add to the row
- * @returns A new error with adjusted position
+ * @param offset - The number of directive lines stripped before grid processing
+ * @returns A new error with 1-indexed line position
  */
 let adjustLineOffset = (error: t, offset: int): t => {
-  if offset === 0 {
-    error
-  } else {
-    {
-      code: adjustCodeLineOffset(error.code, offset),
-      severity: error.severity,
-      context: error.context,
-    }
+  // Always add 1 to convert from 0-indexed to 1-indexed line numbers
+  // offset accounts for stripped directive lines (e.g., @scene: login)
+  // +1 converts from 0-indexed grid rows to 1-indexed file lines
+  let totalOffset = offset + 1
+  {
+    code: adjustCodeLineOffset(error.code, totalOffset),
+    severity: error.severity,
+    context: error.context,
   }
 }

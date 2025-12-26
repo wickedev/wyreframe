@@ -1022,22 +1022,21 @@ describe("E2E-13: Line number offset in warnings with scene directives (Issue #5
         // We MUST have a misaligned warning for this test to be valid
         t->expect(Array.length(misalignedWarnings))->Expect.toBe(1)
 
-        // Verify the line number is correct
+        // Verify the line number is correct (1-indexed)
         switch misalignedWarnings->Array.get(0) {
         | Some(warning) => {
             switch warning.code {
             | ErrorTypes.MisalignedClosingBorder({position, _}) => {
-                // Position.row is 0-indexed:
-                // - Line 1 (0-idx 0): @scene: login - directive, stripped
-                // - Line 2 (0-idx 1): empty - first content line, lineOffset = 1
-                // - Line 3 (0-idx 2): +---+ - grid row 1 (bounds.top)
-                // - Line 4 (0-idx 3): |...| - grid row 2
-                // - Line 5 (0-idx 4): misaligned - grid row 3
-                // - Line 6 (0-idx 5): +---+ - grid row 4 (bounds.bottom)
+                // Position.row is 1-indexed for user display:
+                // - Line 1: @scene: login (directive, stripped - lineOffset = 1)
+                // - Line 2: empty (first content line - grid row 0)
+                // - Line 3: +---+ (grid row 1)
+                // - Line 4: |...| (grid row 2)
+                // - Line 5: misaligned (grid row 3) ← warning points here
+                // - Line 6: +---+ (grid row 4)
                 //
-                // Grid row 3 + lineOffset 1 = row 4 (0-indexed)
-                // Which is Line 5 (1-indexed)
-                t->expect(position.row)->Expect.toBe(4)
+                // Formula: position.row = gridRow + lineOffset + 1 = 3 + 1 + 1 = 5
+                t->expect(position.row)->Expect.toBe(5)
               }
             | _ => t->expect(true)->Expect.toBe(false) // Should not reach here
             }
