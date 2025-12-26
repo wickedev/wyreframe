@@ -992,13 +992,14 @@ let segmentToElement = (
       let position = Position.make(basePosition.row, actualCol)
 
       // Create button ID from text (slugified)
+      // Use String.replaceRegExp (modern API) to avoid escaping issues with %re
       let id = text
         ->String.trim
         ->String.toLowerCase
-        ->Js.String2.replaceByRe(%re("/\\s+/g"), "-")
-        ->Js.String2.replaceByRe(%re("/[^a-z0-9-]/g"), "")
-        ->Js.String2.replaceByRe(%re("/-+/g"), "-")
-        ->Js.String2.replaceByRe(%re("/^-+|-+$/g"), "")
+        ->String.replaceRegExp(%re("/\s+/g"), "-")
+        ->String.replaceRegExp(%re("/[^a-z0-9-]/g"), "")
+        ->String.replaceRegExp(%re("/-+/g"), "-")
+        ->String.replaceRegExp(%re("/^-+|-+$/g"), "")
 
       // Use "[ text ]" format (with spaces) to match visual button width for alignment
       let buttonContent = "[ " ++ text ++ " ]"
@@ -1022,13 +1023,14 @@ let segmentToElement = (
       let position = Position.make(basePosition.row, actualCol)
 
       // Use the same slugify logic as LinkParser for consistent ID generation
+      // Use String.replaceRegExp (modern API) to avoid escaping issues with %re
       let id = text
         ->String.trim
         ->String.toLowerCase
-        ->Js.String2.replaceByRe(%re("/\\s+/g"), "-")
-        ->Js.String2.replaceByRe(%re("/[^a-z0-9-]/g"), "")
-        ->Js.String2.replaceByRe(%re("/-+/g"), "-")
-        ->Js.String2.replaceByRe(%re("/^-+|-+$/g"), "")
+        ->String.replaceRegExp(%re("/\s+/g"), "-")
+        ->String.replaceRegExp(%re("/[^a-z0-9-]/g"), "")
+        ->String.replaceRegExp(%re("/-+/g"), "-")
+        ->String.replaceRegExp(%re("/^-+|-+$/g"), "")
 
       let align = AlignmentCalc.calculateWithStrategy(
         text,
