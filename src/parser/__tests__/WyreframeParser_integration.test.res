@@ -82,7 +82,7 @@ describe("E2E-01: Parse Simple Login Scene", t => {
 |                       |
 |  [x] Remember me      |
 |                       |
-|     [ Login ]         |
+|       [ Login ]       |
 |                       |
 |  "Forgot password?"   |
 |                       |

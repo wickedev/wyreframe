@@ -57,25 +57,63 @@ Based on the issue description and user-provided context:
 
 ### Step 4: Create Task List
 Use TodoWrite to track:
+- [ ] Write regression test (reproduces the issue)
+- [ ] Verify test fails (confirms bug exists)
 - [ ] Implement the fix
-- [ ] Write test cases
-- [ ] Run tests to verify
+- [ ] Verify regression test passes
+- [ ] Run full test suite
 - [ ] Commit changes
 - [ ] Create version tag (if release-version provided)
 - [ ] Comment on issue
 - [ ] Close issue
 
-### Step 5: Implement the Fix
-1. Make necessary code changes to fix the issue
+### Step 5: Write Regression Test First (TDD Approach)
+**Before implementing the fix, write a test that reproduces the issue:**
+
+1. **Create a failing test based on the issue**
+   - Extract the reproduction steps from the issue description
+   - Convert the expected vs actual behavior into test assertions
+   - Use the exact input/scenario described in the issue
+
+2. **Verify the test fails**
+   - Run the test to confirm it captures the bug
+   - The test should fail in the same way the issue describes
+   - If the test passes, re-read the issue - you may have misunderstood the problem
+
+3. **Test naming convention**
+   ```
+   it('should <expected behavior> when <condition from issue>', () => {
+     // Arrange: Setup from issue's reproduction steps
+     // Act: The action that triggers the bug
+     // Assert: Expected behavior (currently failing)
+   });
+   ```
+
+Example test structure:
+```typescript
+describe('Issue #<issue-number>: <issue-title>', () => {
+  it('reproduces the reported bug', () => {
+    // Direct reproduction of issue scenario
+  });
+
+  it('handles the edge case correctly after fix', () => {
+    // Additional edge cases mentioned in issue
+  });
+});
+```
+
+### Step 6: Implement the Fix
+1. Now implement the fix to make the failing test pass
 2. Follow existing code patterns and conventions
 3. Keep changes minimal and focused
+4. Run the regression test to verify it passes
 
-### Step 6: Write Tests
-1. Add test cases that verify the fix
-2. Include edge cases mentioned in the issue
-3. Run all tests to verify nothing is broken
+### Step 7: Run Full Test Suite
+1. Run all existing tests to ensure the fix doesn't break anything
+2. If any tests fail, investigate and fix before proceeding
+3. Add any additional edge case tests if needed
 
-### Step 7: Commit Changes
+### Step 8: Commit Changes
 Create a commit with format:
 ```
 fix: <concise description> (#<issue-number>)
@@ -83,7 +121,7 @@ fix: <concise description> (#<issue-number>)
 <detailed explanation if needed>
 ```
 
-### Step 8: Create Version Tag (if release-version provided)
+### Step 9: Create Version Tag (if release-version provided)
 If a release version was specified:
 1. Create an annotated tag:
    ```bash
@@ -91,7 +129,7 @@ If a release version was specified:
    ```
 2. The tag will be pushed when the user pushes changes
 
-### Step 9: Comment and Close Issue
+### Step 10: Comment and Close Issue
 1. Get commit hash: `git rev-parse --short HEAD`
 2. Comment on issue with changes summary:
    ```bash

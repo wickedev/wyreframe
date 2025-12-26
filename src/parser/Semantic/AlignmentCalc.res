@@ -43,8 +43,9 @@ let calculate = (
     Left
   } else {
     // Calculate space on each side
+    // Note: contentEnd is exclusive (position after last char), so we add 1 to get correct count
     let leftSpace = contentStart - boxLeft
-    let rightSpace = boxRight - contentEnd
+    let rightSpace = boxRight - contentEnd + 1
 
     // Convert to ratios (0.0 to 1.0) relative to box width
     let leftRatio = Int.toFloat(leftSpace) /. Int.toFloat(boxWidth)

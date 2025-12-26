@@ -151,6 +151,24 @@ export interface SceneManager {
 /** Scene change callback type */
 export type OnSceneChangeCallback = (fromScene: string | undefined, toScene: string) => void;
 
+/** Element type for dead end clicks */
+export type DeadEndElementType = 'button' | 'link';
+
+/** Information about a clicked element with no navigation target */
+export interface DeadEndClickInfo {
+  /** The scene ID where the click occurred */
+  sceneId: string;
+  /** The ID of the clicked element */
+  elementId: string;
+  /** The display text of the clicked element */
+  elementText: string;
+  /** The type of element that was clicked */
+  elementType: DeadEndElementType;
+}
+
+/** Dead end click callback type */
+export type OnDeadEndClickCallback = (info: DeadEndClickInfo) => void;
+
 /** Render options */
 export interface RenderOptions {
   /** Theme name */
@@ -174,6 +192,12 @@ export interface RenderOptions {
    * Useful for previewing wireframes in different device contexts without modifying the source.
    */
   device?: DeviceType;
+  /**
+   * Callback fired when a button or link without a navigation target is clicked.
+   * Useful for handling dead-end interactions, showing modals, or custom navigation logic.
+   * @param info - Information about the clicked element and current scene
+   */
+  onDeadEndClick?: OnDeadEndClickCallback;
 }
 
 /** Render result */
