@@ -8,10 +8,11 @@
 // ============================================================================
 
 /**
- * Parse result type - either a successful AST or an array of parse errors.
+ * Parse result type - either a successful (AST, warnings) tuple or an array of parse errors.
+ * Warnings are non-fatal issues like misaligned borders that don't prevent parsing.
  * This Result type is compatible with TypeScript through GenType.
  */
-type parseResult = result<Types.ast, array<ErrorTypes.t>>
+type parseResult = result<(Types.ast, array<ErrorTypes.t>), array<ErrorTypes.t>>
 
 /**
  * Interaction parse result type.
@@ -65,11 +66,11 @@ let scanGrid = (wireframe: string): result<Grid.t, array<ErrorTypes.t>> => {
  * and builds parent-child hierarchy.
  *
  * @param grid The 2D grid from Stage 1
- * @returns Result containing root boxes or errors
+ * @returns Result containing (root boxes, warnings) or errors
  *
  * Requirements: REQ-3, REQ-4, REQ-5, REQ-6, REQ-7 (Shape Detection)
  */
-let detectShapes = (grid: Grid.t): result<array<box>, array<ErrorTypes.t>> => {
+let detectShapes = (grid: Grid.t): result<(array<box>, array<ErrorTypes.t>), array<ErrorTypes.t>> => {
   // Use ShapeDetector to detect all shapes in the grid
   ShapeDetector.detect(grid)
 }
@@ -215,7 +216,11 @@ let parseSingleScene = (
           shapeErrors->Array.forEach(err => errors->Array.push(err)->ignore)
           []
         }
-      | Ok(shapes) => shapes
+      | Ok((boxes, warnings)) => {
+          // Collect warnings (non-fatal issues like misaligned borders)
+          warnings->Array.forEach(w => errors->Array.push(w)->ignore)
+          boxes
+        }
       }
 
       // Stage 3: Parse box content into elements
@@ -273,8 +278,8 @@ let parseSingleScene = (
  * @returns Result containing AST or array of parse errors
  */
 let parseInternal = (wireframe: string, interactions: option<string>): parseResult => {
-  // Accumulator for all errors across stages
-  let allErrors = []
+  // Accumulator for all issues (errors and warnings) across stages
+  let allIssues = []
 
   // Split wireframe into scene blocks
   let sceneBlocks = SemanticParser.splitSceneBlocks(wireframe)
@@ -282,8 +287,8 @@ let parseInternal = (wireframe: string, interactions: option<string>): parseResu
   // Check if wireframe is empty
   let trimmed = wireframe->String.trim
   if sceneBlocks->Array.length === 0 && trimmed === "" {
-    // Empty wireframe - return empty AST
-    Ok({scenes: []})
+    // Empty wireframe - return empty AST with no warnings
+    Ok(({scenes: []}: Types.ast, []))
   } else {
     // Parse each scene block
     let scenes = []
@@ -297,7 +302,7 @@ let parseInternal = (wireframe: string, interactions: option<string>): parseResu
       let sceneContent = contentLines->Array.join("\n")
 
       // Parse this scene through 3-stage pipeline
-      switch parseSingleScene(sceneContent, metadata, allErrors) {
+      switch parseSingleScene(sceneContent, metadata, allIssues) {
       | Some(scene) => scenes->Array.push(scene)->ignore
       | None => () // Scene parsing failed, errors already collected
       }
@@ -314,7 +319,7 @@ let parseInternal = (wireframe: string, interactions: option<string>): parseResu
 
         switch interactionsResult {
         | Error(errors) => {
-            errors->Array.forEach(err => allErrors->Array.push(err)->ignore)
+            errors->Array.forEach(err => allIssues->Array.push(err)->ignore)
             baseAst // Return AST without interactions on error
           }
         | Ok(sceneInteractions) => {
@@ -325,19 +330,23 @@ let parseInternal = (wireframe: string, interactions: option<string>): parseResu
       }
     }
 
+    // Separate errors from warnings
+    let errors = allIssues->Array.filter(issue => ErrorTypes.isError(issue))
+    let warnings = allIssues->Array.filter(issue => ErrorTypes.isWarning(issue))
+
     // Return final result
-    // Return Error if all boxes failed to parse and we have errors
-    // Return Ok if at least some elements were parsed successfully
+    // Return Error if all boxes failed to parse and we have actual errors
+    // Return Ok with warnings if at least some elements were parsed successfully
     let totalElements = finalAst.scenes->Array.reduce(0, (acc, scene) => {
       acc + Array.length(scene.elements)
     })
 
-    if Array.length(allErrors) > 0 && totalElements === 0 {
-      // No elements parsed and we have errors - return error
-      Error(allErrors)
+    if Array.length(errors) > 0 && totalElements === 0 {
+      // No elements parsed and we have errors - return error (include warnings too)
+      Error(allIssues)
     } else {
-      // Either no errors, or some elements were parsed - return Ok
-      Ok(finalAst)
+      // Either no errors, or some elements were parsed - return Ok with warnings
+      Ok((finalAst, warnings))
     }
   }
 }

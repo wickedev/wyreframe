@@ -19,10 +19,10 @@ open Types
 /**
  * Result type for shape detection.
  * Returns either:
- * - Ok(boxes): Array of root-level boxes with nested hierarchy
+ * - Ok((boxes, warnings)): Array of root-level boxes with nested hierarchy, plus any warnings
  * - Error(errors): Array of all errors encountered during detection
  */
-type detectResult = result<array<BoxTracer.box>, array<ErrorTypes.t>>
+type detectResult = result<(array<BoxTracer.box>, array<ErrorTypes.t>), array<ErrorTypes.t>>
 
 // ============================================================================
 // Helper Functions
@@ -121,12 +121,17 @@ let detect = (grid: Grid.t): detectResult => {
   // Only corners that are actually top-left of a box will trace successfully.
   let boxes = []
   let traceFailures = [] // Keep track of failures
+  let warnings = [] // Collect alignment warnings
 
   corners->Array.forEach(corner => {
     switch BoxTracer.traceBox(grid, corner) {
     | Ok(box) => {
         // Successfully traced a box - add to collection
         boxes->Array.push(box)
+
+        // Validate interior alignment and collect warnings
+        let alignmentWarnings = BoxTracer.validateInteriorAlignment(grid, box.bounds)
+        alignmentWarnings->Array.forEach(w => warnings->Array.push(w)->ignore)
       }
     | Error(traceError) => {
         // This corner failed to trace as a top-left corner.
@@ -141,14 +146,14 @@ let detect = (grid: Grid.t): detectResult => {
     // No boxes traced successfully
     if Array.length(corners) === 0 {
       // No corners at all - truly empty wireframe
-      Ok([])
+      Ok(([], []))
     } else if Array.length(traceFailures) > 0 {
       // Had corners but all traces failed - this indicates malformed boxes
       // Return all trace failures as errors
       Error(traceFailures)
     } else {
       // No corners and no failures - empty result
-      Ok([])
+      Ok(([], []))
     }
   } else {
     // Step 4: Detect dividers for each successfully traced box
@@ -160,8 +165,8 @@ let detect = (grid: Grid.t): detectResult => {
     // Step 6: Build hierarchy using HierarchyBuilder
     switch HierarchyBuilder.buildHierarchy(uniqueBoxes) {
     | Ok(rootBoxes) => {
-        // Hierarchy built successfully - return the boxes
-        Ok(rootBoxes)
+        // Hierarchy built successfully - return the boxes with any warnings
+        Ok((rootBoxes, warnings))
       }
     | Error(hierarchyError) => {
         // Hierarchy building failed (e.g., overlapping boxes)
@@ -210,12 +215,14 @@ let rec flattenBoxes = (boxes: array<BoxTracer.box>): array<BoxTracer.box> => {
  */
 let getStats = (result: detectResult): string => {
   switch result {
-  | Ok(boxes) => {
+  | Ok((boxes, warnings)) => {
       let rootCount = Array.length(boxes)
       let totalCount = countBoxes(boxes)
+      let warningCount = Array.length(warnings)
       `Shape Detection Success:
   Root boxes: ${Int.toString(rootCount)}
-  Total boxes (including nested): ${Int.toString(totalCount)}`
+  Total boxes (including nested): ${Int.toString(totalCount)}
+  Warnings: ${Int.toString(warningCount)}`
     }
   | Error(errors) => {
       let errorCount = Array.length(errors)

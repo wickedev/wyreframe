@@ -59,6 +59,11 @@ type errorCode =
       depth: int,
       position: Position.t,
     }) // Nesting depth exceeds recommended level
+  | MisalignedClosingBorder({
+      position: Position.t,
+      expectedCol: int,
+      actualCol: int,
+    }) // Closing border '|' is not aligned with the box edge (REQ-7)
 
 /**
  * Complete parse error with error code, severity, and context
@@ -75,7 +80,7 @@ type t = {
  */
 let getSeverity = (code: errorCode): severity => {
   switch code {
-  | UnusualSpacing(_) | DeepNesting(_) => Warning
+  | UnusualSpacing(_) | DeepNesting(_) | MisalignedClosingBorder(_) => Warning
   | _ => Error
   }
 }
@@ -130,6 +135,7 @@ let getPosition = (code: errorCode): option<Position.t> => {
   | InvalidInteractionDSL({position}) => position
   | UnusualSpacing({position}) => Some(position)
   | DeepNesting({position}) => Some(position)
+  | MisalignedClosingBorder({position}) => Some(position)
   }
 }
 
@@ -165,5 +171,6 @@ let getCodeName = (code: errorCode): string => {
   | InvalidInteractionDSL(_) => "InvalidInteractionDSL"
   | UnusualSpacing(_) => "UnusualSpacing"
   | DeepNesting(_) => "DeepNesting"
+  | MisalignedClosingBorder(_) => "MisalignedClosingBorder"
   }
 }

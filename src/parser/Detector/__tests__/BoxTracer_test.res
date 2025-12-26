@@ -90,3 +90,112 @@ describe("BoxTracer - Width Validation", () => {
     }
   })
 })
+
+describe("BoxTracer - Misaligned Closing Border Detection (Issue #4)", () => {
+  test("should detect misaligned closing border and generate warning", t => {
+    // Issue #4: Wireframe with misaligned closing '|' should parse successfully
+    // but generate a warning
+    let input = [
+      "+---------------------------+",
+      "|       'WYREFRAME'          |", // Row 1: closing '|' at col 29 (1 char too far right)
+      "|                           |",
+      "|  +---------------------+  |",
+      "|  | #email              |  |",
+      "|  +---------------------+  |",
+      "|                           |",
+      "|       [ Login ]           |",
+      "|                           |",
+      "+---------------------------+",
+    ]
+
+    let grid = Grid.fromLines(input)
+    let topLeft = Types.Position.make(0, 0)
+
+    // First, verify the box traces successfully
+    let result = BoxTracer.traceBox(grid, topLeft)
+
+    switch result {
+    | Ok(box) => {
+        // Box should be traced successfully
+        t->expect(box.bounds.top)->Expect.toBe(0)
+        t->expect(box.bounds.right)->Expect.toBe(28)
+
+        // Now validate interior alignment - this should find the misalignment
+        let warnings = BoxTracer.validateInteriorAlignment(grid, box.bounds)
+
+        // Should have at least one warning for row 1
+        t->expect(Array.length(warnings) > 0)->Expect.toBe(true)
+
+        // Check the first warning is for misaligned closing border
+        if Array.length(warnings) > 0 {
+          let firstWarning = warnings[0]
+          switch firstWarning {
+          | Some(w) => {
+              switch w.code {
+              | ErrorTypes.MisalignedClosingBorder({expectedCol, actualCol, _}) => {
+                  t->expect(expectedCol)->Expect.toBe(28) // Expected closing at col 28
+                  t->expect(actualCol)->Expect.toBe(29)   // But found at col 29
+                }
+              | _ => t->expect(true)->Expect.toBe(false) // fail: Expected MisalignedClosingBorder warning
+              }
+            }
+          | None => t->expect(true)->Expect.toBe(false) // fail: Warning array empty
+          }
+        }
+      }
+    | Error(err) => {
+        Console.log(err)
+        t->expect(true)->Expect.toBe(false) // fail: Box should trace successfully even with misaligned border
+      }
+    }
+  })
+
+  test("should not generate warning for properly aligned box", t => {
+    let input = [
+      "+---------------------------+",
+      "|       'WYREFRAME'         |", // Properly aligned
+      "|                           |",
+      "+---------------------------+",
+    ]
+
+    let grid = Grid.fromLines(input)
+    let topLeft = Types.Position.make(0, 0)
+
+    let result = BoxTracer.traceBox(grid, topLeft)
+
+    switch result {
+    | Ok(box) => {
+        // Validate interior alignment - should have no warnings
+        let warnings = BoxTracer.validateInteriorAlignment(grid, box.bounds)
+        t->expect(Array.length(warnings))->Expect.toBe(0)
+      }
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Well-formed box should trace successfully
+    }
+  })
+
+  test("should detect multiple misaligned rows", t => {
+    let input = [
+      "+---------------+",
+      "| Line 1       |", // Missing a space, but pipe is at expected position
+      "| Line 2        |", // Extra space, pipe is 1 char too far right
+      "| Line 3         |", // Even more spaces, pipe is 2 chars too far right
+      "+---------------+",
+    ]
+
+    let grid = Grid.fromLines(input)
+    let topLeft = Types.Position.make(0, 0)
+
+    let result = BoxTracer.traceBox(grid, topLeft)
+
+    switch result {
+    | Ok(box) => {
+        let warnings = BoxTracer.validateInteriorAlignment(grid, box.bounds)
+
+        // Should detect warnings for rows with misaligned pipes
+        // Row 2 (index 2) and Row 3 (index 3) have misaligned closing '|'
+        t->expect(Array.length(warnings) >= 2)->Expect.toBe(true)
+      }
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Box should trace successfully
+    }
+  })
+})

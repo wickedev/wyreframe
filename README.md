@@ -105,18 +105,23 @@ switch Renderer.createUI(ui, None) {
 ```javascript
 import { parse, render, createUI, createUIOrThrow } from 'wyreframe';
 
-// Parse only
+// Parse only - returns { success, ast } or { success, errors }
 const result = parse(text);
 
-// Render only
-const { root, sceneManager } = render(ast);
+// Render only - IMPORTANT: pass result.ast, not result directly!
+if (result.success) {
+  const { root, sceneManager } = render(result.ast);
+}
 
-// Parse + Render (recommended)
+// Parse + Render (recommended) - handles the wrapper automatically
 const result = createUI(text);
 
 // Throw on error
 const { root, sceneManager } = createUIOrThrow(text);
 ```
+
+> **Note:** `parse()` returns a wrapper object `{ success: true, ast: AST }` or `{ success: false, errors: [] }`.
+> When using `render()` directly, make sure to pass `result.ast`, not the result object itself.
 
 ### ReScript
 

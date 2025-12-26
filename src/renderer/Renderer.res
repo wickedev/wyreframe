@@ -77,6 +77,11 @@ let defaultOptions: renderOptions = {
  */
 type sceneManager = {
   goto: string => unit,
+  back: unit => unit,
+  forward: unit => unit,
+  refresh: unit => unit,
+  canGoBack: unit => bool,
+  canGoForward: unit => bool,
   getCurrentScene: unit => option<string>,
   getSceneIds: unit => array<string>,
 }
@@ -415,8 +420,11 @@ let renderScene = (scene: scene, ~onAction: option<actionHandler>=?): DomBinding
 
 let createSceneManager = (scenes: Map.t<string, DomBindings.element>): sceneManager => {
   let currentScene = ref(None)
+  let historyStack: ref<array<string>> = ref([])
+  let forwardStack: ref<array<string>> = ref([])
 
-  let goto = (id: string): unit => {
+  // Internal function to switch scenes without affecting history
+  let switchToScene = (id: string): unit => {
     switch currentScene.contents {
     | Some(currentId) => {
         switch scenes->Map.get(currentId) {
@@ -436,6 +444,88 @@ let createSceneManager = (scenes: Map.t<string, DomBindings.element>): sceneMana
     }
   }
 
+  let goto = (id: string): unit => {
+    // Add current scene to history before navigating
+    switch currentScene.contents {
+    | Some(currentId) if currentId != id => {
+        historyStack := historyStack.contents->Array.concat([currentId])
+        // Clear forward stack when navigating to new scene
+        forwardStack := []
+      }
+    | _ => ()
+    }
+    switchToScene(id)
+  }
+
+  let back = (): unit => {
+    let history = historyStack.contents
+    let len = history->Array.length
+    if len > 0 {
+      switch history->Array.get(len - 1) {
+      | Some(prevId) => {
+          // Add current scene to forward stack
+          switch currentScene.contents {
+          | Some(currentId) => {
+              forwardStack := forwardStack.contents->Array.concat([currentId])
+            }
+          | None => ()
+          }
+          // Remove last item from history
+          historyStack := history->Array.slice(~start=0, ~end=len - 1)
+          // Navigate to previous scene
+          switchToScene(prevId)
+        }
+      | None => ()
+      }
+    }
+  }
+
+  let forward = (): unit => {
+    let fwdStack = forwardStack.contents
+    let len = fwdStack->Array.length
+    if len > 0 {
+      switch fwdStack->Array.get(len - 1) {
+      | Some(nextId) => {
+          // Add current scene to history
+          switch currentScene.contents {
+          | Some(currentId) => {
+              historyStack := historyStack.contents->Array.concat([currentId])
+            }
+          | None => ()
+          }
+          // Remove last item from forward stack
+          forwardStack := fwdStack->Array.slice(~start=0, ~end=len - 1)
+          // Navigate to next scene
+          switchToScene(nextId)
+        }
+      | None => ()
+      }
+    }
+  }
+
+  let refresh = (): unit => {
+    switch currentScene.contents {
+    | Some(id) => {
+        // Remove active class and re-add it to trigger any CSS animations
+        switch scenes->Map.get(id) {
+        | Some(el) => {
+            el->DomBindings.classList->DomBindings.remove("active")
+            // Use setTimeout to ensure the class removal is processed
+            let _ = Js.Global.setTimeout(() => {
+              el->DomBindings.classList->DomBindings.add("active")
+            }, 0)
+          }
+        | None => ()
+        }
+      }
+    | None => ()
+    }
+  }
+
+  let canGoBack = (): bool => historyStack.contents->Array.length > 0
+
+  let canGoForward = (): bool => forwardStack.contents->Array.length > 0
+
   let getCurrentScene = (): option<string> => currentScene.contents
 
   let getSceneIds = (): array<string> => {
@@ -444,6 +534,11 @@ let createSceneManager = (scenes: Map.t<string, DomBindings.element>): sceneMana
 
   {
     goto,
+    back,
+    forward,
+    refresh,
+    canGoBack,
+    canGoForward,
     getCurrentScene,
     getSceneIds,
   }
@@ -494,10 +589,12 @@ let render = (ast: ast, options: option<renderOptions>): renderResult => {
   | None => ()
   }
 
-  // Create a ref to hold the goto function (set after sceneManager is created)
+  // Create refs to hold navigation functions (set after sceneManager is created)
   let gotoRef: ref<option<string => unit>> = ref(None)
+  let backRef: ref<option<unit => unit>> = ref(None)
+  let forwardRef: ref<option<unit => unit>> = ref(None)
 
-  // Create action handler that uses the gotoRef
+  // Create action handler that uses the refs
   let handleAction = (action: interactionAction): unit => {
     switch action {
     | Goto({target, _}) => {
@@ -507,12 +604,16 @@ let render = (ast: ast, options: option<renderOptions>): renderResult => {
         }
       }
     | Back => {
-        // TODO: Implement history-based back navigation
-        ()
+        switch backRef.contents {
+        | Some(back) => back()
+        | None => ()
+        }
       }
     | Forward => {
-        // TODO: Implement history-based forward navigation
-        ()
+        switch forwardRef.contents {
+        | Some(forward) => forward()
+        | None => ()
+        }
       }
     | Validate(_) => {
         // TODO: Implement field validation
@@ -535,8 +636,10 @@ let render = (ast: ast, options: option<renderOptions>): renderResult => {
 
   let manager = createSceneManager(sceneMap)
 
-  // Now that sceneManager is created, set the gotoRef
+  // Now that sceneManager is created, set the refs
   gotoRef := Some(manager.goto)
+  backRef := Some(manager.back)
+  forwardRef := Some(manager.forward)
 
   if ast.scenes->Array.length > 0 {
     switch ast.scenes->Array.get(0) {
@@ -568,6 +671,7 @@ type createUISuccessResult = {
   root: DomBindings.element,
   sceneManager: sceneManager,
   ast: Types.ast,
+  warnings: array<ErrorTypes.t>,
 }
 
 type createUIResult = result<createUISuccessResult, array<ErrorTypes.t>>
@@ -595,9 +699,9 @@ type createUIResult = result<createUISuccessResult, array<ErrorTypes.t>>
 @genType
 let createUI = (text: string, options: option<renderOptions>): createUIResult => {
   switch Parser.parse(text) {
-  | Ok(ast) => {
+  | Ok((ast, warnings)) => {
       let {root, sceneManager} = render(ast, options)
-      Ok({root, sceneManager, ast})
+      Ok({root, sceneManager, ast, warnings})
     }
   | Error(errors) => Error(errors)
   }
@@ -621,9 +725,9 @@ let createUI = (text: string, options: option<renderOptions>): createUIResult =>
 @genType
 let createUIOrThrow = (text: string, options: option<renderOptions>): createUISuccessResult => {
   switch Parser.parse(text) {
-  | Ok(ast) => {
+  | Ok((ast, warnings)) => {
       let {root, sceneManager} = render(ast, options)
-      {root, sceneManager, ast}
+      {root, sceneManager, ast, warnings}
     }
   | Error(errors) => {
       let messages = errors

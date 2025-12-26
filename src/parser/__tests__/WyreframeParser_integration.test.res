@@ -94,7 +94,7 @@ describe("E2E-01: Parse Simple Login Scene", t => {
 
     // Verify successful parse
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         // Verify scene properties
         t->expect(Belt.Array.length(ast.scenes))->Expect.toBe(1)
 
@@ -200,7 +200,7 @@ describe("E2E-02: Parse Multi-Scene Wireframe", t => {
     let result = Parser.parse(multiSceneWireframe)
 
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         // Verify scene count
         t->expect(Belt.Array.length(ast.scenes))->Expect.toBe(2)
 
@@ -277,7 +277,7 @@ describe("E2E-03: Parse Deeply Nested Boxes", t => {
     let result = Parser.parse(nestedWireframe)
 
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Find root box
@@ -374,7 +374,7 @@ describe("E2E-04: Parse Wireframe with Dividers", t => {
     let result = Parser.parse(dividerWireframe)
 
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Verify box with dividers exists
@@ -469,7 +469,7 @@ describe("E2E-05: Parse Wireframe with Interactions", t => {
     let result = Parser.parse(wireframe ++ "\n" ++ interactions)
 
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Verify username input exists (search recursively)
@@ -645,7 +645,7 @@ describe("E2E-09: Generate Warnings for Deep Nesting", t => {
 
     // Parsing should succeed even with warnings
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         // Check if warnings are included in result
         // (Implementation may vary - warnings might be in a separate field)
         t->expect(Belt.Array.length(ast.scenes))->Expect.toBe(1)
@@ -717,7 +717,7 @@ describe("E2E-10: Parse Complete Registration Flow", t => {
     let result = Parser.parse(registrationWireframe)
 
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         t->expect(scene.id)->Expect.toBe("register")
@@ -813,7 +813,7 @@ describe("E2E-11: Parse Dashboard with Multiple Components", t => {
     let result = Parser.parse(dashboardWireframe)
 
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Find root dashboard box

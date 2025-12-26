@@ -38,7 +38,7 @@ let expectOkWithBoxCount = (
   expectedCount: int
 ): array<BoxTracer.box> => {
   switch result {
-  | Ok(boxes) => {
+  | Ok((boxes, _warnings)) => {
       t->expect(Array.length(boxes))->Expect.toBe(expectedCount)
       boxes
     }
@@ -66,7 +66,7 @@ let expectErrorWithCount = (
       t->expect(Array.length(errors))->Expect.Int.toBeGreaterThanOrEqual(minErrorCount)
       errors
     }
-  | Ok(boxes) => {
+  | Ok((_boxes, _warnings)) => {
       t->expect(true)->Expect.toBe(false) // fail: Expected Error but got Ok
       []
     }

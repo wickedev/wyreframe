@@ -198,6 +198,23 @@ Consider simplifying the structure:
 This is a warning - parsing will continue.`,
     }
 
+  | MisalignedClosingBorder({position, expectedCol, actualCol}) => {
+      title: "⚠️  Misaligned closing border",
+      message: `The closing '|' at ${formatPosition(position)} is not aligned with the box border:
+• Expected column: ${Int.toString(expectedCol + 1)}
+• Actual column: ${Int.toString(actualCol + 1)}
+• Off by: ${Int.toString(Js.Math.abs_int(expectedCol - actualCol))} ${Js.Math.abs_int(expectedCol - actualCol) === 1 ? "space" : "spaces"}
+
+The closing border character on this row is not aligned with the right edge of the box.`,
+      solution: `💡 Solution:
+Align the closing '|' to column ${Int.toString(expectedCol + 1)}:
+• ${expectedCol > actualCol ? "Add" : "Remove"} ${Int.toString(Js.Math.abs_int(expectedCol - actualCol))} space${Js.Math.abs_int(expectedCol - actualCol) === 1 ? "" : "s"} before the closing '|'
+• Use a monospace font editor to ensure proper alignment
+• Check that all rows in this box have the closing '|' at the same column
+
+This is a warning - parsing will continue with the detected box structure.`,
+    }
+
   | InvalidInput({message}) => {
       title: "❌ Invalid input",
       message: `${message}

@@ -66,7 +66,7 @@ describe("SemanticParser Integration - Login Scene", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         // Verify scene count
         t->expect(Array.length(ast.scenes))->Expect.toBe(1)
 
@@ -133,7 +133,7 @@ describe("SemanticParser Integration - Login Scene", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Check that elements have position information
@@ -181,7 +181,7 @@ describe("SemanticParser Integration - Multiple Scenes", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         // Verify scene count
         t->expect(Array.length(ast.scenes))->Expect.toBe(2)
 
@@ -228,7 +228,7 @@ describe("SemanticParser Integration - Multiple Scenes", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.toBe(3)
         t->expect((ast.scenes->Array.getUnsafe(0)).id)->Expect.toBe("one")
         t->expect((ast.scenes->Array.getUnsafe(1)).id)->Expect.toBe("two")
@@ -260,7 +260,7 @@ describe("SemanticParser Integration - Nested Boxes", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Find outer box
@@ -313,7 +313,7 @@ describe("SemanticParser Integration - Nested Boxes", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Verify level 1 box exists
@@ -349,7 +349,7 @@ describe("SemanticParser Integration - Dividers", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Check for divider element
@@ -385,7 +385,7 @@ describe("SemanticParser Integration - Dividers", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.toBe(1)
 
         // Verify scene has content
@@ -424,7 +424,7 @@ describe("SemanticParser Integration - All Element Types", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Check for emphasis text
@@ -517,7 +517,7 @@ describe("SemanticParser Integration - Alignment", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Collect all buttons
@@ -577,7 +577,7 @@ describe("SemanticParser Integration - Button Elements", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         let button = scene.elements->Array.find(el =>
@@ -608,7 +608,7 @@ describe("SemanticParser Integration - Button Elements", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let button = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
           | Types.Button({text}) => text === "Create Account"
@@ -636,7 +636,7 @@ describe("SemanticParser Integration - Input Elements", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let input = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
           | Types.Input(_) => true
@@ -662,7 +662,7 @@ describe("SemanticParser Integration - Input Elements", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let input = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
           | Types.Input({id: "email"}) => true
@@ -687,7 +687,7 @@ describe("SemanticParser Integration - Link Elements", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let link = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
           | Types.Link(_) => true
@@ -718,7 +718,7 @@ describe("SemanticParser Integration - Checkbox Elements", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let checkbox = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
           | Types.Checkbox({checked: true}) => true
@@ -744,7 +744,7 @@ describe("SemanticParser Integration - Checkbox Elements", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let checkbox = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
           | Types.Checkbox({checked: false}) => true
@@ -769,7 +769,7 @@ describe("SemanticParser Integration - Emphasis Text", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let emphasisText = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
           | Types.Text({emphasis: true}) => true
@@ -811,7 +811,7 @@ describe("SemanticParser Integration - Mixed Content", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         // Count different element types
@@ -885,7 +885,7 @@ describe("SemanticParser Integration - Scene Directives", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         t->expect(scene.id)->Expect.toBe("test")
@@ -909,7 +909,7 @@ describe("SemanticParser Integration - Scene Directives", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let scene = ast.scenes->Array.getUnsafe(0)
 
         t->expect(scene.id)->Expect.toBe("minimal")
@@ -936,7 +936,7 @@ describe("SemanticParser Integration - Empty Scenes", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.toBe(1)
 
         let scene = ast.scenes->Array.getUnsafe(0)
@@ -961,7 +961,7 @@ describe("SemanticParser Integration - Empty Scenes", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.toBe(1)
 
         let scene = ast.scenes->Array.getUnsafe(0)
@@ -987,7 +987,7 @@ describe("SemanticParser Integration - Edge Cases", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         let button = (ast.scenes->Array.getUnsafe(0)).elements->Array.find(el =>
           switch el {
           | Types.Button(_) => true
@@ -1011,7 +1011,7 @@ describe("SemanticParser Integration - Edge Cases", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.toBe(1)
       }
     | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected to handle special characters
@@ -1028,7 +1028,7 @@ describe("SemanticParser Integration - Edge Cases", t => {
 `
 
     switch Parser.parse(wireframe) {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.toBe(1)
       }
     | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected to handle unicode

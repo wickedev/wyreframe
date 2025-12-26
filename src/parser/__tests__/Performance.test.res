@@ -37,7 +37,7 @@ describe("Performance Benchmarks", t => {
 
     // Verify parse succeeded
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.Int.toBeGreaterThan(0)
       }
     | Error(errors) => {
@@ -63,7 +63,7 @@ describe("Performance Benchmarks", t => {
 
     // Verify parse succeeded
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.Int.toBeGreaterThan(0)
       }
     | Error(errors) => {
@@ -88,7 +88,7 @@ describe("Performance Benchmarks", t => {
 
     // Verify parse succeeded
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.Int.toBeGreaterThan(0)
       }
     | Error(errors) => {
@@ -124,7 +124,7 @@ describe("Performance Benchmarks", t => {
 
     // Verify parse succeeded
     switch result {
-    | Ok(ast) => {
+    | Ok((ast, _warnings)) => {
         t->expect(Array.length(ast.scenes))->Expect.Int.toBeGreaterThan(0)
       }
     | Error(errors) => {
@@ -176,7 +176,7 @@ describe("Performance Benchmarks", t => {
         // Verify it parses without errors
         let result = Parser.parse(wireframe)
         switch result {
-        | Ok(ast) => {
+        | Ok((ast, _warnings)) => {
             t->expect(Array.length(ast.scenes))->Expect.Int.toBeGreaterThan(0)
           }
         | Error(errors) => {
@@ -208,7 +208,7 @@ describe("Performance Benchmarks", t => {
 
       // Verify each parse succeeds
       switch result {
-      | Ok(ast) => {
+      | Ok((ast, _warnings)) => {
           t->expect(Array.length(ast.scenes))->Expect.Int.toBeGreaterThan(0)
         }
       | Error(_) => {

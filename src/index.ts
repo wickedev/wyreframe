@@ -173,6 +173,7 @@ export interface RenderResult {
 export type ParseSuccessResult = {
   success: true;
   ast: AST;
+  warnings: ParseError[];
 };
 
 export type ParseErrorResult = {
@@ -199,6 +200,7 @@ export type CreateUISuccessResult = {
   root: HTMLElement;
   sceneManager: SceneManager;
   ast: AST;
+  warnings: ParseError[];
 };
 
 export type CreateUIErrorResult = {
@@ -246,10 +248,11 @@ type ReScriptResult<T, E> = ReScriptOk<T> | ReScriptError<E>;
  * ```
  */
 export function parse(text: string): ParseResult {
-  const result = Parser.parse(text) as ReScriptResult<AST, ParseError[]>;
+  const result = Parser.parse(text) as ReScriptResult<[AST, ParseError[]], ParseError[]>;
 
   if (result.TAG === 'Ok') {
-    return { success: true, ast: result._0 };
+    const [ast, warnings] = result._0;
+    return { success: true, ast, warnings };
   } else {
     return { success: false, errors: result._0 };
   }
@@ -294,10 +297,11 @@ export function parseOrThrow(text: string): AST {
  * @returns Parse result with success flag
  */
 export function parseWireframe(wireframe: string): ParseResult {
-  const result = Parser.parseWireframe(wireframe) as ReScriptResult<AST, ParseError[]>;
+  const result = Parser.parseWireframe(wireframe) as ReScriptResult<[AST, ParseError[]], ParseError[]>;
 
   if (result.TAG === 'Ok') {
-    return { success: true, ast: result._0 };
+    const [ast, warnings] = result._0;
+    return { success: true, ast, warnings };
   } else {
     return { success: false, errors: result._0 };
   }
@@ -336,6 +340,31 @@ export function parseInteractions(dsl: string): InteractionResult {
  * ```
  */
 export function render(ast: AST, options?: RenderOptions): RenderResult {
+  // Input validation: Check if user accidentally passed ParseResult instead of AST
+  if (ast && typeof ast === 'object' && 'success' in ast) {
+    const parseResult = ast as unknown as ParseResult;
+    if (parseResult.success === true && 'ast' in parseResult) {
+      throw new Error(
+        'render() expects an AST object, but received a ParseResult. ' +
+          'Did you forget to extract .ast? Use: render(result.ast) instead of render(result)'
+      );
+    } else if (parseResult.success === false) {
+      throw new Error(
+        'render() received a failed ParseResult. ' +
+          'Check parse errors before calling render: if (result.success) { render(result.ast); }'
+      );
+    }
+  }
+
+  // Validate AST structure
+  if (!ast || typeof ast !== 'object' || !Array.isArray(ast.scenes)) {
+    throw new Error(
+      'render() expects an AST object with a scenes array. ' +
+        'Did you pass ParseResult instead of ParseResult.ast? ' +
+        'Correct usage: const result = parse(text); if (result.success) { render(result.ast); }'
+    );
+  }
+
   // Pass undefined if no options, so ReScript uses its defaults
   const result = Renderer.render(ast, options);
 
@@ -380,6 +409,7 @@ export function createUI(text: string, options?: RenderOptions): CreateUIResult 
     root,
     sceneManager,
     ast: parseResult.ast,
+    warnings: parseResult.warnings,
   };
 }
 
