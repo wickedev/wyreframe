@@ -1,6 +1,6 @@
 {
   "name": "wyreframe",
-  "version": "0.1.2",
+  "version": "0.2.3",
   "description": "ASCII wireframe + interaction DSL to HTML converter with scene transitions",
   "author": "wickedev",
   "repository": {
