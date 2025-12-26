@@ -344,7 +344,7 @@ if (result.success) {
 - [Examples](docs/examples.md)
 - [Developer Guide](docs/developer-guide.md)
 - [Testing Guide](docs/testing.md)
-- [Live Demo](examples/index.html)
+- [Live Demo](https://wyreframe.studio/)
 
 ## Development
 
