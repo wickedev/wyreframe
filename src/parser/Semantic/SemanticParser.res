@@ -261,7 +261,32 @@ let defaultSceneMetadata = (): sceneMetadata => {
  * ```
  * Returns: ({id: "login", title: "Login Page", transition: "slide"}, ["+--Login--+", ...])
  */
-let parseSceneDirectives = (lines: array<string>): (sceneMetadata, array<string>) => {
+/**
+ * Result type for parseSceneDirectives that includes line offset information.
+ * The lineOffset indicates how many lines were removed from the beginning
+ * before the first content line, which is needed to correctly report
+ * line numbers in warnings and errors.
+ */
+type directiveParseResult = {
+  metadata: sceneMetadata,
+  contentLines: array<string>,
+  lineOffset: int,  // Number of directive lines stripped from the beginning
+}
+
+/**
+ * Parse scene directives and track line offset.
+ * Returns metadata, content lines, and the number of lines stripped from the beginning.
+ *
+ * The lineOffset is calculated as the index of the first content line in the original
+ * input. This offset is needed to convert grid row numbers back to original file line numbers.
+ *
+ * Example:
+ * - Input: ["@scene: login", "", "+---+", ...]
+ * - Output: contentLines = ["", "+---+", ...], lineOffset = 1
+ *
+ * Grid row 0 corresponds to original line (0 + lineOffset + 1) = line 2 (1-indexed)
+ */
+let parseSceneDirectivesWithOffset = (lines: array<string>): directiveParseResult => {
   // Use mutable refs to accumulate directive values
   let sceneId = ref(None)
   let title = ref(None)
@@ -269,7 +294,10 @@ let parseSceneDirectives = (lines: array<string>): (sceneMetadata, array<string>
   let device = ref(None)
   let contentLines = []
 
-  lines->Array.forEach(line => {
+  // Track the index of the first content line (for line offset calculation)
+  let firstContentLineIndex = ref(None)
+
+  lines->Array.forEachWithIndex((line, lineIndex) => {
     let trimmed = line->String.trim
 
     if trimmed->String.startsWith("@scene:") {
@@ -301,6 +329,10 @@ let parseSceneDirectives = (lines: array<string>): (sceneMetadata, array<string>
       ()
     } else {
       // Non-directive line - add to content
+      // Track the index of the first content line
+      if firstContentLineIndex.contents === None {
+        firstContentLineIndex := Some(lineIndex)
+      }
       contentLines->Array.push(line)
     }
   })
@@ -334,7 +366,27 @@ let parseSceneDirectives = (lines: array<string>): (sceneMetadata, array<string>
     device: finalDevice,
   }
 
-  (metadata, contentLines)
+  // Calculate line offset: index of first content line
+  // If no content lines, offset is 0
+  let lineOffset = switch firstContentLineIndex.contents {
+  | Some(idx) => idx
+  | None => 0
+  }
+
+  {
+    metadata,
+    contentLines,
+    lineOffset,
+  }
+}
+
+/**
+ * Parse scene directives from an array of lines.
+ * This is the original API that returns just (metadata, contentLines) for backward compatibility.
+ */
+let parseSceneDirectives = (lines: array<string>): (sceneMetadata, array<string>) => {
+  let result = parseSceneDirectivesWithOffset(lines)
+  (result.metadata, result.contentLines)
 }
 
 /**

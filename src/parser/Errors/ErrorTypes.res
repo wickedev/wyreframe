@@ -174,3 +174,61 @@ let getCodeName = (code: errorCode): string => {
   | MisalignedClosingBorder(_) => "MisalignedClosingBorder"
   }
 }
+
+/**
+ * Adjust the line offset in an error code's position.
+ * This is used to correct line numbers when scene directive lines
+ * are stripped before grid processing.
+ *
+ * @param code - The error code to adjust
+ * @param offset - The number of lines to add to the row (e.g., number of directive lines stripped)
+ * @returns A new error code with adjusted position
+ */
+let adjustCodeLineOffset = (code: errorCode, offset: int): errorCode => {
+  let adjustPos = (pos: Position.t): Position.t => {
+    Position.make(pos.row + offset, pos.col)
+  }
+
+  switch code {
+  | InvalidInput(_) as c => c
+  | InvalidStartPosition(pos) => InvalidStartPosition(adjustPos(pos))
+  | UncloseBox({corner, direction}) => UncloseBox({corner: adjustPos(corner), direction})
+  | MismatchedWidth({topLeft, topWidth, bottomWidth}) =>
+    MismatchedWidth({topLeft: adjustPos(topLeft), topWidth, bottomWidth})
+  | MisalignedPipe({position, expectedCol, actualCol}) =>
+    MisalignedPipe({position: adjustPos(position), expectedCol, actualCol})
+  | OverlappingBoxes({box1Name, box2Name, position}) =>
+    OverlappingBoxes({box1Name, box2Name, position: adjustPos(position)})
+  | InvalidElement({content, position}) =>
+    InvalidElement({content, position: adjustPos(position)})
+  | UnclosedBracket({opening}) => UnclosedBracket({opening: adjustPos(opening)})
+  | EmptyButton({position}) => EmptyButton({position: adjustPos(position)})
+  | InvalidInteractionDSL({message, position}) =>
+    InvalidInteractionDSL({message, position: position->Option.map(adjustPos)})
+  | UnusualSpacing({position, issue}) =>
+    UnusualSpacing({position: adjustPos(position), issue})
+  | DeepNesting({depth, position}) => DeepNesting({depth, position: adjustPos(position)})
+  | MisalignedClosingBorder({position, expectedCol, actualCol}) =>
+    MisalignedClosingBorder({position: adjustPos(position), expectedCol, actualCol})
+  }
+}
+
+/**
+ * Adjust the line offset in an error's position.
+ * Creates a new error with the position adjusted by the given offset.
+ *
+ * @param error - The error to adjust
+ * @param offset - The number of lines to add to the row
+ * @returns A new error with adjusted position
+ */
+let adjustLineOffset = (error: t, offset: int): t => {
+  if offset === 0 {
+    error
+  } else {
+    {
+      code: adjustCodeLineOffset(error.code, offset),
+      severity: error.severity,
+      context: error.context,
+    }
+  }
+}

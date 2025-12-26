@@ -191,12 +191,14 @@ let mergeInteractionsIntoAST = (
  *
  * @param sceneContent ASCII wireframe content for one scene (without directives)
  * @param sceneMetadata Scene metadata from directives
+ * @param lineOffset Number of directive lines stripped (for adjusting error line numbers)
  * @param errors Accumulator for errors
  * @returns Parsed scene or None if parsing failed
  */
 let parseSingleScene = (
   sceneContent: string,
   sceneMetadata: SemanticParser.sceneMetadata,
+  lineOffset: int,
   errors: array<ErrorTypes.t>,
 ): option<Types.scene> => {
   // Stage 1: Grid Scanner
@@ -204,7 +206,11 @@ let parseSingleScene = (
 
   switch gridResult {
   | Error(gridErrors) => {
-      gridErrors->Array.forEach(err => errors->Array.push(err)->ignore)
+      // Adjust line numbers by offset before adding to errors
+      gridErrors->Array.forEach(err => {
+        let adjusted = ErrorTypes.adjustLineOffset(err, lineOffset)
+        errors->Array.push(adjusted)->ignore
+      })
       None
     }
   | Ok(grid) => {
@@ -213,12 +219,20 @@ let parseSingleScene = (
 
       let shapes = switch shapesResult {
       | Error(shapeErrors) => {
-          shapeErrors->Array.forEach(err => errors->Array.push(err)->ignore)
+          // Adjust line numbers by offset before adding to errors
+          shapeErrors->Array.forEach(err => {
+            let adjusted = ErrorTypes.adjustLineOffset(err, lineOffset)
+            errors->Array.push(adjusted)->ignore
+          })
           []
         }
       | Ok((boxes, warnings)) => {
           // Collect warnings (non-fatal issues like misaligned borders)
-          warnings->Array.forEach(w => errors->Array.push(w)->ignore)
+          // Adjust line numbers by offset before adding to errors
+          warnings->Array.forEach(w => {
+            let adjusted = ErrorTypes.adjustLineOffset(w, lineOffset)
+            errors->Array.push(adjusted)->ignore
+          })
           boxes
         }
       }
@@ -294,15 +308,16 @@ let parseInternal = (wireframe: string, interactions: option<string>): parseResu
     let scenes = []
 
     sceneBlocks->Array.forEach(block => {
-      // Parse scene directives
+      // Parse scene directives and get line offset
       let lines = block->String.split("\n")
-      let (metadata, contentLines) = SemanticParser.parseSceneDirectives(lines)
+      let {metadata, contentLines, lineOffset} = SemanticParser.parseSceneDirectivesWithOffset(lines)
 
       // Rejoin content lines (without directives)
       let sceneContent = contentLines->Array.join("\n")
 
       // Parse this scene through 3-stage pipeline
-      switch parseSingleScene(sceneContent, metadata, allIssues) {
+      // Pass lineOffset to adjust error/warning line numbers
+      switch parseSingleScene(sceneContent, metadata, lineOffset, allIssues) {
       | Some(scene) => scenes->Array.push(scene)->ignore
       | None => () // Scene parsing failed, errors already collected
       }
