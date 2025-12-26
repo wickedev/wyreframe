@@ -1037,6 +1037,149 @@ describe("SemanticParser Integration - Edge Cases", t => {
 })
 
 // ============================================================================
+// TEST CASE SP-16: Horizontal Layout Detection (Issue #13)
+// ============================================================================
+
+describe("SemanticParser Integration - Horizontal Layout", t => {
+  test("SP-16: Issue #13 - detects horizontally positioned child boxes as Row", t => {
+    // This test reproduces GitHub Issue #13:
+    // Two buttons in side-by-side boxes should be wrapped in a Row element
+    let wireframe = `
+@scene: login
+
++---------------------------------------+
+|                                       |
+|  +---------------+ +---------------+  |
+|  | [ Google ]    | | [ GitHub ]    |  |
+|  +---------------+ +---------------+  |
+|                                       |
++---------------------------------------+
+`
+
+    switch Parser.parse(wireframe) {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+        t->expect(scene.id)->Expect.toBe("login")
+
+        // The two horizontal child boxes should be wrapped in a Row element
+        let hasRow = hasElement(scene.elements, el =>
+          switch el {
+          | Types.Row({children}) => {
+              // Row should contain two child boxes (each with a button)
+              children->Array.length >= 2
+            }
+          | _ => false
+          }
+        )
+        t->expect(hasRow)->Expect.toBe(true)
+      }
+    | Error(errors) => {
+        Console.error(errors)
+        t->expect(true)->Expect.toBe(false) // fail: SP-16: Expected successful parse of horizontal layout
+      }
+    }
+  })
+
+  test("SP-16a: horizontal boxes with different content are wrapped in Row", t => {
+    let wireframe = `
+@scene: test
+
++----------------------------------+
+|  +----------+ +----------+       |
+|  |   #name  | |  #email  |       |
+|  +----------+ +----------+       |
++----------------------------------+
+`
+
+    switch Parser.parse(wireframe) {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        // Should have a Row containing the two input boxes
+        let hasRow = hasElement(scene.elements, el =>
+          switch el {
+          | Types.Row({children}) => children->Array.length >= 2
+          | _ => false
+          }
+        )
+        t->expect(hasRow)->Expect.toBe(true)
+      }
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
+    }
+  })
+
+  test("SP-16b: three horizontal boxes are wrapped in Row", t => {
+    let wireframe = `
+@scene: test
+
++----------------------------------------------+
+|  +----------+ +----------+ +----------+      |
+|  | [ One ]  | | [ Two ]  | | [Three]  |      |
+|  +----------+ +----------+ +----------+      |
++----------------------------------------------+
+`
+
+    switch Parser.parse(wireframe) {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        // Should have a Row containing three child boxes
+        let hasRowWith3 = hasElement(scene.elements, el =>
+          switch el {
+          | Types.Row({children}) => children->Array.length >= 3
+          | _ => false
+          }
+        )
+        t->expect(hasRowWith3)->Expect.toBe(true)
+      }
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
+    }
+  })
+
+  test("SP-16c: vertically stacked boxes are NOT wrapped in Row", t => {
+    let wireframe = `
+@scene: test
+
++-------------------+
+|  +-------------+  |
+|  | [ First ]   |  |
+|  +-------------+  |
+|                   |
+|  +-------------+  |
+|  | [ Second ]  |  |
+|  +-------------+  |
++-------------------+
+`
+
+    switch Parser.parse(wireframe) {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        // Should NOT have a Row wrapping these vertical boxes
+        // Each box should be a separate child
+        let hasRowWithBoxes = hasElement(scene.elements, el =>
+          switch el {
+          | Types.Row({children}) => {
+              // Check if this row contains boxes (which would be wrong)
+              children->Array.some(child =>
+                switch child {
+                | Types.Box(_) => true
+                | _ => false
+                }
+              )
+            }
+          | _ => false
+          }
+        )
+        // Vertical boxes should NOT be in a Row
+        t->expect(hasRowWithBoxes)->Expect.toBe(false)
+      }
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
+    }
+  })
+})
+
+// ============================================================================
 // SUMMARY
 // ============================================================================
 
@@ -1057,6 +1200,7 @@ describe("SemanticParser Integration - Edge Cases", t => {
  * SP-12: Mixed Content - ✓
  * SP-14: Scene Directives - ✓
  * SP-15: Empty Scenes - ✓
+ * SP-16: Horizontal Layout (Issue #13) - ✓
  *
  * Additional Coverage:
  * - Edge cases (long text, special chars, unicode)

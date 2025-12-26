@@ -1181,6 +1181,100 @@ let parseBoxContent = (
 }
 
 /**
+ * Get the column position of a Box element.
+ */
+let getBoxColumn = (elem: element): int => {
+  switch elem {
+  | Box({bounds, _}) => bounds.left
+  | _ => 0
+  }
+}
+
+/**
+ * Group horizontally aligned box elements into Row elements.
+ *
+ * Boxes are considered horizontally aligned if they share the same top row.
+ * Single boxes are returned as-is, while groups of 2+ are wrapped in a Row.
+ *
+ * @param elements - Array of elements (should be Box elements)
+ * @returns Array of elements with horizontal boxes wrapped in Rows
+ */
+let groupHorizontalBoxes = (elements: array<element>): array<element> => {
+  // Only process Box elements - separate them from non-boxes
+  let boxes = elements->Array.filter(el =>
+    switch el {
+    | Box(_) => true
+    | _ => false
+    }
+  )
+  let nonBoxes = elements->Array.filter(el =>
+    switch el {
+    | Box(_) => false
+    | _ => true
+    }
+  )
+
+  // If no boxes or only one box, return as-is
+  if Array.length(boxes) <= 1 {
+    elements
+  } else {
+    // Group boxes by their top row
+    let boxesWithRow = boxes->Array.map(box => {
+      let row = switch box {
+      | Box({bounds, _}) => bounds.top
+      | _ => 0
+      }
+      (row, box)
+    })
+
+    // Sort by row first, then by column within same row
+    let sorted = boxesWithRow->Array.toSorted(((rowA, boxA), (rowB, boxB)) => {
+      if rowA !== rowB {
+        Float.fromInt(rowA - rowB)
+      } else {
+        Float.fromInt(getBoxColumn(boxA) - getBoxColumn(boxB))
+      }
+    })
+
+    // Group boxes by row
+    let groups: array<(int, array<element>)> = []
+    sorted->Array.forEach(((row, box)) => {
+      // Find if there's already a group for this row
+      let existingGroupIdx = groups->Array.findIndex(((groupRow, _)) => groupRow === row)
+      if existingGroupIdx >= 0 {
+        // Add to existing group
+        switch groups->Array.get(existingGroupIdx) {
+        | Some((_, groupBoxes)) => {
+            groupBoxes->Array.push(box)
+          }
+        | None => ()
+        }
+      } else {
+        // Create new group
+        groups->Array.push((row, [box]))
+      }
+    })
+
+    // Convert groups to elements
+    let groupedElements = groups->Array.map(((_, groupBoxes)) => {
+      if Array.length(groupBoxes) >= 2 {
+        // Wrap multiple boxes in a Row
+        Row({
+          children: groupBoxes,
+          align: Left, // Default alignment
+        })
+      } else {
+        // Single box, return as-is
+        groupBoxes->Array.getUnsafe(0)
+      }
+    })
+
+    // Combine non-boxes with grouped elements
+    Array.concat(nonBoxes, groupedElements)
+  }
+}
+
+/**
  * Get the row position of an element for sorting purposes.
  */
 let rec getElementRow = (elem: element): int => {
@@ -1238,8 +1332,11 @@ let rec parseBoxRecursive = (
     parseBoxRecursive(childBox, gridCells, registry)
   })
 
-  // Combine content elements and child boxes
-  let allChildren = Array.concat(contentElements, childBoxElements)
+  // Group horizontally aligned child boxes into Row elements
+  let groupedChildElements = groupHorizontalBoxes(childBoxElements)
+
+  // Combine content elements and grouped child boxes
+  let allChildren = Array.concat(contentElements, groupedChildElements)
 
   // Sort elements by their row position to preserve visual order
   let sortedChildren = allChildren->Array.toSorted((a, b) => {
