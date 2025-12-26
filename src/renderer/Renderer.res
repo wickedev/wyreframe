@@ -57,6 +57,24 @@ module DomBindings = {
 type onSceneChangeCallback = (option<string>, string) => unit
 
 /**
+ * Dead end click info type.
+ * Contains information about the clicked element that has no navigation target.
+ */
+type deadEndClickInfo = {
+  sceneId: string,
+  elementId: string,
+  elementText: string,
+  elementType: [#button | #link],
+}
+
+/**
+ * Dead end click callback type.
+ * Called when a button or link without navigation target is clicked.
+ * @param info Information about the clicked element and current scene
+ */
+type onDeadEndClickCallback = deadEndClickInfo => unit
+
+/**
  * Configuration for the rendering process.
  */
 type renderOptions = {
@@ -65,6 +83,7 @@ type renderOptions = {
   injectStyles: bool,
   containerClass: option<string>,
   onSceneChange: option<onSceneChangeCallback>,
+  onDeadEndClick: option<onDeadEndClickCallback>,
   device: option<deviceType>,
 }
 
@@ -77,6 +96,7 @@ let defaultOptions: renderOptions = {
   injectStyles: true,
   containerClass: None,
   onSceneChange: None,
+  onDeadEndClick: None,
   device: None,
 }
 
@@ -230,17 +250,44 @@ let deviceTypeToClass = (device: deviceType): string => {
  */
 type actionHandler = interactionAction => unit
 
+/**
+ * Dead end handler function type - called when an element without navigation is clicked.
+ * Receives element ID, text, and type.
+ */
+type deadEndHandler = (string, string, [#button | #link]) => unit
+
+/**
+ * Check if an action is a navigation action (Goto, Back, Forward).
+ */
+let isNavigationAction = (action: interactionAction): bool => {
+  switch action {
+  | Goto(_) | Back | Forward => true
+  | Validate(_) | Call(_) => false
+  }
+}
+
+/**
+ * Check if actions array has any navigation actions.
+ */
+let hasNavigationAction = (actions: array<interactionAction>): bool => {
+  actions->Array.some(isNavigationAction)
+}
+
 // ============================================================================
 // Element Rendering
 // ============================================================================
 
-let rec renderElement = (elem: element, ~onAction: option<actionHandler>=?): option<DomBindings.element> => {
+let rec renderElement = (
+  elem: element,
+  ~onAction: option<actionHandler>=?,
+  ~onDeadEnd: option<deadEndHandler>=?,
+): option<DomBindings.element> => {
   // Handle input-only boxes by rendering children directly in a wrapper
   if isInputOnlyBox(elem) {
     let inputs = getInputsFromBox(elem)
     // If only one input, render it directly
     switch inputs->Array.get(0) {
-    | Some(input) => renderElement(input, ~onAction?)
+    | Some(input) => renderElement(input, ~onAction?, ~onDeadEnd?)
     | None => None
     }
   } else {
@@ -258,7 +305,7 @@ let rec renderElement = (elem: element, ~onAction: option<actionHandler>=?): opt
         }
 
         children->Array.forEach(child => {
-          switch renderElement(child, ~onAction?) {
+          switch renderElement(child, ~onAction?, ~onDeadEnd?) {
           | Some(el) => div->DomBindings.appendChild(el)
           | None => ()
           }
@@ -274,8 +321,11 @@ let rec renderElement = (elem: element, ~onAction: option<actionHandler>=?): opt
       btn->DomBindings.setTextContent(text)
       applyAlignment(btn, align)
 
-      // Attach click handler for actions
-      if actions->Array.length > 0 {
+      // Check if button has navigation actions
+      let hasNavigation = hasNavigationAction(actions)
+
+      if hasNavigation {
+        // Attach click handler for navigation actions
         switch onAction {
         | Some(handler) => {
             btn->DomBindings.addEventListener("click", _event => {
@@ -284,6 +334,16 @@ let rec renderElement = (elem: element, ~onAction: option<actionHandler>=?): opt
               | Some(action) => handler(action)
               | None => ()
               }
+            })
+          }
+        | None => ()
+        }
+      } else {
+        // No navigation - call dead end handler
+        switch onDeadEnd {
+        | Some(handler) => {
+            btn->DomBindings.addEventListener("click", _event => {
+              handler(id, text, #button)
             })
           }
         | None => ()
@@ -312,8 +372,11 @@ let rec renderElement = (elem: element, ~onAction: option<actionHandler>=?): opt
       link->DomBindings.setTextContent(text)
       applyAlignment(link, align)
 
-      // Attach click handler for actions
-      if actions->Array.length > 0 {
+      // Check if link has navigation actions
+      let hasNavigation = hasNavigationAction(actions)
+
+      if hasNavigation {
+        // Attach click handler for navigation actions
         switch onAction {
         | Some(handler) => {
             link->DomBindings.addEventListener("click", event => {
@@ -323,6 +386,17 @@ let rec renderElement = (elem: element, ~onAction: option<actionHandler>=?): opt
               | Some(action) => handler(action)
               | None => ()
               }
+            })
+          }
+        | None => ()
+        }
+      } else {
+        // No navigation - call dead end handler
+        switch onDeadEnd {
+        | Some(handler) => {
+            link->DomBindings.addEventListener("click", event => {
+              DomBindings.preventDefault(event)
+              handler(id, text, #link)
             })
           }
         | None => ()
@@ -376,7 +450,7 @@ let rec renderElement = (elem: element, ~onAction: option<actionHandler>=?): opt
       applyAlignment(row, align)
 
       children->Array.forEach(child => {
-        switch renderElement(child, ~onAction?) {
+        switch renderElement(child, ~onAction?, ~onDeadEnd?) {
         | Some(el) => row->DomBindings.appendChild(el)
         | None => ()
         }
@@ -397,7 +471,7 @@ let rec renderElement = (elem: element, ~onAction: option<actionHandler>=?): opt
       contentEl->DomBindings.setClassName("wf-section-content")
 
       children->Array.forEach(child => {
-        switch renderElement(child, ~onAction?) {
+        switch renderElement(child, ~onAction?, ~onDeadEnd?) {
         | Some(el) => contentEl->DomBindings.appendChild(el)
         | None => ()
         }
@@ -411,13 +485,17 @@ let rec renderElement = (elem: element, ~onAction: option<actionHandler>=?): opt
   }
 }
 
-let renderScene = (scene: scene, ~onAction: option<actionHandler>=?): DomBindings.element => {
+let renderScene = (
+  scene: scene,
+  ~onAction: option<actionHandler>=?,
+  ~onDeadEnd: option<deadEndHandler>=?,
+): DomBindings.element => {
   let sceneEl = DomBindings.document->DomBindings.createElement("div")
   sceneEl->DomBindings.setClassName("wf-scene")
   sceneEl->DomBindings.dataset->DomBindings.setDataAttr("scene", scene.id)
 
   scene.elements->Array.forEach(elem => {
-    switch renderElement(elem, ~onAction?) {
+    switch renderElement(elem, ~onAction?, ~onDeadEnd?) {
     | Some(el) => sceneEl->DomBindings.appendChild(el)
     | None => ()
     }
@@ -670,7 +748,21 @@ let render = (ast: ast, options: option<renderOptions>): renderResult => {
   let sceneMap = Map.make()
 
   ast.scenes->Array.forEach(scene => {
-    let sceneEl = renderScene(scene, ~onAction=handleAction)
+    // Create a scene-specific dead end handler that includes the scene ID
+    let handleDeadEnd = switch opts.onDeadEndClick {
+    | Some(callback) =>
+      Some((elementId: string, elementText: string, elementType: [#button | #link]) => {
+        callback({
+          sceneId: scene.id,
+          elementId,
+          elementText,
+          elementType,
+        })
+      })
+    | None => None
+    }
+
+    let sceneEl = renderScene(scene, ~onAction=handleAction, ~onDeadEnd=?handleDeadEnd)
     app->DomBindings.appendChild(sceneEl)
     sceneMap->Map.set(scene.id, sceneEl)
   })
