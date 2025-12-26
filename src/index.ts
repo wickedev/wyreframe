@@ -168,6 +168,12 @@ export interface RenderOptions {
    * @param toScene - The scene ID navigating to
    */
   onSceneChange?: OnSceneChangeCallback;
+  /**
+   * Override the device type for all scenes.
+   * When provided, this overrides the device type defined in scene definitions.
+   * Useful for previewing wireframes in different device contexts without modifying the source.
+   */
+  device?: DeviceType;
 }
 
 /** Render result */

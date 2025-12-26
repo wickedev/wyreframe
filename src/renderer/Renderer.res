@@ -65,6 +65,7 @@ type renderOptions = {
   injectStyles: bool,
   containerClass: option<string>,
   onSceneChange: option<onSceneChangeCallback>,
+  device: option<deviceType>,
 }
 
 /**
@@ -76,6 +77,7 @@ let defaultOptions: renderOptions = {
   injectStyles: true,
   containerClass: None,
   onSceneChange: None,
+  device: None,
 }
 
 // ============================================================================
@@ -610,10 +612,19 @@ let render = (ast: ast, options: option<renderOptions>): renderResult => {
   | None => ()
   }
 
-  // Apply device class based on first scene's device type
-  switch ast.scenes->Array.get(0) {
-  | Some(firstScene) => {
-      let deviceClass = deviceTypeToClass(firstScene.device)
+  // Apply device class based on options.device override or first scene's device type
+  let deviceType = switch opts.device {
+  | Some(device) => Some(device)
+  | None =>
+    switch ast.scenes->Array.get(0) {
+    | Some(firstScene) => Some(firstScene.device)
+    | None => None
+    }
+  }
+
+  switch deviceType {
+  | Some(device) => {
+      let deviceClass = deviceTypeToClass(device)
       app->DomBindings.classList->DomBindings.add(deviceClass)
     }
   | None => ()

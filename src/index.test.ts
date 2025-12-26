@@ -7,7 +7,7 @@
 
 import { describe, test, expect, vi } from 'vitest';
 import { parse, render, createUI } from './index';
-import type { AST, ParseResult, OnSceneChangeCallback } from './index';
+import type { AST, ParseResult, OnSceneChangeCallback, DeviceType, RenderOptions } from './index';
 
 describe('render() input validation (Issue #1)', () => {
   const validWireframe = `
@@ -247,6 +247,115 @@ describe('onSceneChange callback (Issue #2)', () => {
         { from: 'login', to: 'dashboard' },
         { from: 'dashboard', to: 'login' },
       ]);
+    }
+  });
+});
+
+describe('device option override (Issue #11)', () => {
+  const desktopWireframe = `
+@scene: test
+@device: desktop
+
++---------------+
+| Desktop Scene |
++---------------+
+`;
+
+  test('DeviceType type is exported', () => {
+    // Verify the type is exported by using it
+    const device: DeviceType = 'mobile';
+    expect(typeof device).toBe('string');
+  });
+
+  test('RenderOptions includes device field in type definition', () => {
+    // Verify the device option is part of RenderOptions type
+    const options: RenderOptions = {
+      device: 'mobile',
+    };
+    expect(options.device).toBe('mobile');
+  });
+
+  test('RenderOptions accepts all valid device types', () => {
+    const deviceTypes: DeviceType[] = [
+      'desktop',
+      'laptop',
+      'tablet',
+      'tablet-landscape',
+      'mobile',
+      'mobile-landscape',
+    ];
+
+    deviceTypes.forEach((deviceType) => {
+      const options: RenderOptions = { device: deviceType };
+      expect(options.device).toBe(deviceType);
+    });
+  });
+
+  // Note: DOM-dependent tests are skipped in Node.js environment
+  test.skip('render accepts device option without throwing (requires DOM)', () => {
+    const result = parse(desktopWireframe);
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      // This should not throw - just verify the API accepts the option
+      expect(() => {
+        render(result.ast, { device: 'mobile' });
+      }).not.toThrow();
+    }
+  });
+
+  test.skip('createUI accepts device option without throwing (requires DOM)', () => {
+    // Verify the API accepts the option
+    expect(() => {
+      createUI(desktopWireframe, { device: 'tablet' });
+    }).not.toThrow();
+  });
+
+  test.skip('device option overrides scene-defined device class (requires DOM)', () => {
+    const result = parse(desktopWireframe);
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      // Render with mobile override
+      const { root } = render(result.ast, { device: 'mobile' });
+
+      // Should have mobile class, not desktop
+      expect(root.classList.contains('wf-device-mobile')).toBe(true);
+      expect(root.classList.contains('wf-device-desktop')).toBe(false);
+    }
+  });
+
+  test.skip('device option applies correct class for all device types (requires DOM)', () => {
+    const result = parse(desktopWireframe);
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      const deviceClassMap: Record<DeviceType, string> = {
+        desktop: 'wf-device-desktop',
+        laptop: 'wf-device-laptop',
+        tablet: 'wf-device-tablet',
+        'tablet-landscape': 'wf-device-tablet-landscape',
+        mobile: 'wf-device-mobile',
+        'mobile-landscape': 'wf-device-mobile-landscape',
+      };
+
+      Object.entries(deviceClassMap).forEach(([deviceType, expectedClass]) => {
+        const { root } = render(result.ast, { device: deviceType as DeviceType });
+        expect(root.classList.contains(expectedClass)).toBe(true);
+      });
+    }
+  });
+
+  test.skip('renders with scene device when no override provided (requires DOM)', () => {
+    const result = parse(desktopWireframe);
+    expect(result.success).toBe(true);
+
+    if (result.success) {
+      // Render without device override
+      const { root } = render(result.ast);
+
+      // Should use the scene-defined desktop device
+      expect(root.classList.contains('wf-device-desktop')).toBe(true);
     }
   });
 });
