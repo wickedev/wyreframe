@@ -11,6 +11,8 @@
 import * as Parser from '../src/parser/Parser.mjs';
 // @ts-ignore - ReScript generated module
 import * as Renderer from '../src/renderer/Renderer.mjs';
+// @ts-ignore - ReScript generated module
+import * as Fixer from '../src/parser/Fixer/Fixer.mjs';
 
 // ============================================================================
 // Type Definitions
@@ -219,6 +221,35 @@ export type CreateUIErrorResult = {
 };
 
 export type CreateUIResult = CreateUISuccessResult | CreateUIErrorResult;
+
+// ============================================================================
+// Fix Result Types
+// ============================================================================
+
+/** Describes a single fix that was applied */
+export interface FixedIssue {
+  original: ParseError;
+  description: string;
+  line: number;
+  column: number;
+}
+
+/** Successful fix result */
+export type FixSuccessResult = {
+  success: true;
+  text: string;
+  fixed: FixedIssue[];
+  remaining: ParseError[];
+};
+
+/** Failed fix result */
+export type FixErrorResult = {
+  success: false;
+  errors: ParseError[];
+};
+
+/** Result of fix operation */
+export type FixResult = FixSuccessResult | FixErrorResult;
 
 // ============================================================================
 // Internal ReScript Result Type
@@ -447,6 +478,105 @@ export function createUIOrThrow(
   return { root, sceneManager, ast };
 }
 
+// ============================================================================
+// Fix API Functions
+// ============================================================================
+
+/**
+ * Internal ReScript Fix Result type
+ */
+interface ReScriptFixSuccess {
+  text: string;
+  fixed: Array<{
+    original: { code: unknown; severity: unknown; context: unknown };
+    description: string;
+    line: number;
+    column: number;
+  }>;
+  remaining: Array<{ code: unknown; severity: unknown; context: unknown }>;
+}
+
+/**
+ * Convert ReScript error to ParseError
+ */
+function convertReScriptError(err: { code: unknown; severity: unknown; context: unknown }): ParseError {
+  // The ReScript error has a complex structure, extract what we need
+  return {
+    message: String(err.code) || 'Unknown error',
+    line: undefined,
+    column: undefined,
+    source: undefined,
+  };
+}
+
+/**
+ * Attempt to auto-fix errors and warnings in the wireframe text.
+ *
+ * This function analyzes the text for common issues and automatically
+ * corrects them where possible. Fixable issues include:
+ * - MisalignedPipe: Adjusts pipe positions to correct columns
+ * - MisalignedClosingBorder: Fixes closing border alignment
+ * - UnusualSpacing: Replaces tabs with spaces
+ * - UnclosedBracket: Adds missing closing brackets
+ * - MismatchedWidth: Extends shorter borders to match
+ *
+ * @param text - The wireframe markdown text
+ * @returns Fix result with fixed text and details about applied fixes
+ *
+ * @example
+ * ```typescript
+ * const result = fix(text);
+ * if (result.success) {
+ *   console.log(`Fixed ${result.fixed.length} issues`);
+ *   if (result.remaining.length > 0) {
+ *     console.warn('Some issues require manual fix:', result.remaining);
+ *   }
+ *   // Use the fixed text
+ *   const parsed = parse(result.text);
+ * }
+ * ```
+ */
+export function fix(text: string): FixResult {
+  const result = Fixer.fix(text) as ReScriptResult<ReScriptFixSuccess, Array<{ code: unknown; severity: unknown; context: unknown }>>;
+
+  if (result.TAG === 'Ok') {
+    const success = result._0;
+    return {
+      success: true,
+      text: success.text,
+      fixed: success.fixed.map((f) => ({
+        original: convertReScriptError(f.original),
+        description: f.description,
+        line: f.line,
+        column: f.column,
+      })),
+      remaining: success.remaining.map(convertReScriptError),
+    };
+  } else {
+    return {
+      success: false,
+      errors: result._0.map(convertReScriptError),
+    };
+  }
+}
+
+/**
+ * Convenience function - fix and return just the fixed text.
+ * Returns the original text if nothing was fixed or if fixing failed.
+ *
+ * @param text - The wireframe markdown text
+ * @returns The fixed text (or original if no fixes applied)
+ *
+ * @example
+ * ```typescript
+ * const fixedText = fixOnly(rawMarkdown);
+ * const result = parse(fixedText);
+ * ```
+ */
+export function fixOnly(text: string): string {
+  return Fixer.fixOnly(text) as string;
+}
+
 // Version info
 export const version: string = Parser.version;
 export const implementation: string = Parser.implementation;
@@ -460,6 +590,8 @@ export default {
   render,
   createUI,
   createUIOrThrow,
+  fix,
+  fixOnly,
   version,
   implementation,
 };
