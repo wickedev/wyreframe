@@ -956,6 +956,76 @@ let stripSectionBorders = (line: string): string => {
  * Requirements: REQ-15 (Element parsing and AST generation)
  */
 /**
+ * Get the visual width of an inline segment.
+ * - ButtonSegment: "[ text ]" = text length + 4
+ * - LinkSegment: just the text length
+ * - TextSegment: just the text length
+ */
+let getSegmentWidth = (segment: inlineSegment): int => {
+  switch segment {
+  | TextSegment(text, _) => String.length(text)
+  | ButtonSegment(text, _) => String.length(text) + 4 // "[ " + text + " ]"
+  | LinkSegment(text, _) => String.length(text)
+  }
+}
+
+/**
+ * Get the column offset of an inline segment.
+ */
+let getSegmentOffset = (segment: inlineSegment): int => {
+  switch segment {
+  | TextSegment(_, offset) => offset
+  | ButtonSegment(_, offset) => offset
+  | LinkSegment(_, offset) => offset
+  }
+}
+
+/**
+ * Calculate the alignment for a Row element based on the combined span
+ * of all its segments within the container bounds.
+ *
+ * Algorithm:
+ * 1. Find the start position of the first segment
+ * 2. Find the end position of the last segment (offset + width)
+ * 3. Calculate the total content span
+ * 4. Use AlignmentCalc to determine alignment based on left/right space
+ *
+ * @param segments - Array of inline segments in the row
+ * @param baseCol - The base column (left border + 1)
+ * @param row - The row number in the grid
+ * @param bounds - The container bounds
+ * @returns The calculated alignment for the Row
+ */
+let calculateRowAlignment = (
+  segments: array<inlineSegment>,
+  baseCol: int,
+  row: int,
+  bounds: Bounds.t,
+): Types.alignment => {
+  switch (segments->Array.get(0), segments->Array.get(Array.length(segments) - 1)) {
+  | (Some(firstSegment), Some(lastSegment)) => {
+      // Calculate the start position (first segment's offset)
+      let firstOffset = getSegmentOffset(firstSegment)
+      let startCol = baseCol + firstOffset
+
+      // Calculate the end position (last segment's offset + width)
+      let lastOffset = getSegmentOffset(lastSegment)
+      let lastWidth = getSegmentWidth(lastSegment)
+      let endCol = baseCol + lastOffset + lastWidth
+
+      // Create a virtual content string with length equal to the row span
+      let rowWidth = endCol - startCol
+      let virtualContent = String.repeat("x", rowWidth)
+
+      // Use AlignmentCalc to calculate alignment based on position
+      let position = Position.make(row, startCol)
+      AlignmentCalc.calculate(virtualContent, position, bounds)
+    }
+  | _ => Left // Fallback to Left if no segments
+  }
+}
+
+/**
  * Convert inline segment to element.
  * Creates appropriate element type based on segment variant.
  * Uses the segment's column offset for accurate position-based alignment.
@@ -1119,13 +1189,22 @@ let parseContentLine = (
 
     if segments->Array.length > 1 {
       // Multiple segments - create a Row with all elements
-      // Each segment has its own column offset for correct alignment calculation
+      // Issue #21: Account for leading spaces in the original line for correct alignment
+      let leadingSpaces = {
+        let original = line
+        let trimmedStart = original->String.trimStart
+        original->String.length - trimmedStart->String.length
+      }
+      // Calculate actual column including leading spaces
+      let actualBaseCol = baseCol + leadingSpaces
       let rowChildren = segments->Array.map(segment => {
-        segmentToElement(segment, basePosition, baseCol, box.bounds)
+        segmentToElement(segment, basePosition, actualBaseCol, box.bounds)
       })
+      // Issue #21: Calculate Row alignment based on combined segment positions
+      let rowAlign = calculateRowAlignment(segments, actualBaseCol, row, box.bounds)
       Some(Row({
         children: rowChildren,
-        align: Left,
+        align: rowAlign,
       }))
     } else if segments->Array.length === 1 {
       // Single segment - check if it's a special element

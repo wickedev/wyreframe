@@ -42,6 +42,14 @@ let hasElement = (elements: array<Types.element>, predicate: Types.element => bo
   allElements->Array.some(predicate)
 }
 
+/**
+ * Find an element matching a predicate, searching recursively.
+ */
+let findElement = (elements: array<Types.element>, predicate: Types.element => bool): option<Types.element> => {
+  let allElements = collectAllElements(elements)
+  allElements->Array.find(predicate)
+}
+
 // ============================================================================
 // TEST CASE SP-01: Simple Login Scene Parsing
 // ============================================================================
@@ -1180,6 +1188,164 @@ describe("SemanticParser Integration - Horizontal Layout", t => {
 })
 
 // ============================================================================
+// TEST CASE SP-17: Row Alignment for Evenly Distributed Elements (Issue #21)
+// ============================================================================
+
+describe("SemanticParser Integration - Row Alignment (Issue #21)", _t => {
+  test("SP-17: Issue #21 - evenly distributed buttons in Row should have Center alignment", t => {
+    // This test reproduces GitHub Issue #21:
+    // Social login buttons that are evenly spaced in ASCII should have Center alignment
+    // Input: |   [ Google ]  [ Apple ]  [ GitHub ]   |
+    // The buttons have roughly equal spacing on left and right, so Row should be Center-aligned
+    let wireframe = `
+@scene: login
+
++---------------------------------------+
+|                                       |
+|   [ Google ]  [ Apple ]  [ GitHub ]   |
+|                                       |
++---------------------------------------+
+`
+
+    switch Parser.parse(wireframe) {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+        t->expect(scene.id)->Expect.toBe("login")
+
+        // Find the Row element containing the three buttons (search recursively in Box children)
+        let rowElement = findElement(scene.elements, el =>
+          switch el {
+          | Types.Row({children}) => children->Array.length === 3
+          | _ => false
+          }
+        )
+
+        switch rowElement {
+        | Some(Types.Row({align, children})) => {
+            // Row should have Center alignment for evenly distributed elements
+            t->expect(align)->Expect.toBe(Types.Center)
+
+            // Verify all three buttons are present
+            let buttonCount = children->Array.filter(child =>
+              switch child {
+              | Types.Button(_) => true
+              | _ => false
+              }
+            )->Array.length
+            t->expect(buttonCount)->Expect.toBe(3)
+          }
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find Row with 3 children
+        }
+      }
+    | Error(errors) => {
+        Console.error(errors)
+        t->expect(true)->Expect.toBe(false) // fail: SP-17: Expected successful parse
+      }
+    }
+  })
+
+  test("SP-17a: left-aligned buttons in Row should have Left alignment", t => {
+    // Buttons positioned near left edge should result in Left-aligned Row
+    let wireframe = `
+@scene: test
+
++---------------------------------------+
+|  [ One ]  [ Two ]  [ Three ]          |
++---------------------------------------+
+`
+
+    switch Parser.parse(wireframe) {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        let rowElement = findElement(scene.elements, el =>
+          switch el {
+          | Types.Row({children}) => children->Array.length === 3
+          | _ => false
+          }
+        )
+
+        switch rowElement {
+        | Some(Types.Row({align, _})) => {
+            // Row should have Left alignment
+            t->expect(align)->Expect.toBe(Types.Left)
+          }
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find Row
+        }
+      }
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
+    }
+  })
+
+  test("SP-17b: right-aligned buttons in Row should have Right alignment", t => {
+    // Buttons positioned near right edge should result in Right-aligned Row
+    // Need >30% of box width as left space to trigger Right alignment
+    let wireframe = `
+@scene: test
+
++---------------------------------------+
+|              [ One ]  [ Two ]  [ OK ] |
++---------------------------------------+
+`
+
+    switch Parser.parse(wireframe) {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        let rowElement = findElement(scene.elements, el =>
+          switch el {
+          | Types.Row({children}) => children->Array.length === 3
+          | _ => false
+          }
+        )
+
+        switch rowElement {
+        | Some(Types.Row({align, _})) => {
+            // Row should have Right alignment
+            t->expect(align)->Expect.toBe(Types.Right)
+          }
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find Row
+        }
+      }
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
+    }
+  })
+
+  test("SP-17c: mixed text and button Row uses overall position for alignment", t => {
+    // Mixed content row should calculate alignment from overall bounds
+    let wireframe = `
+@scene: test
+
++---------------------------------------+
+|   Don't have an account? "Sign up"    |
++---------------------------------------+
+`
+
+    switch Parser.parse(wireframe) {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        let rowElement = findElement(scene.elements, el =>
+          switch el {
+          | Types.Row({children}) => children->Array.length === 2
+          | _ => false
+          }
+        )
+
+        switch rowElement {
+        | Some(Types.Row({align, _})) => {
+            // Row with centered content should be Center-aligned
+            t->expect(align)->Expect.toBe(Types.Center)
+          }
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Expected to find Row
+        }
+      }
+    | Error(_) => t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
+    }
+  })
+})
+
+// ============================================================================
 // SUMMARY
 // ============================================================================
 
@@ -1201,6 +1367,7 @@ describe("SemanticParser Integration - Horizontal Layout", t => {
  * SP-14: Scene Directives - ✓
  * SP-15: Empty Scenes - ✓
  * SP-16: Horizontal Layout (Issue #13) - ✓
+ * SP-17: Row Alignment (Issue #21) - ✓
  *
  * Additional Coverage:
  * - Edge cases (long text, special chars, unicode)
