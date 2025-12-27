@@ -180,6 +180,9 @@ and element =
   | Divider({
       position: Position.t,
     })
+  | Spacer({
+      position: Position.t,
+    })
   | Row({
       children: array<element>,
       align: alignment,
@@ -284,6 +287,7 @@ let getElementType = (elem: element): string => {
   | Checkbox(_) => "Checkbox"
   | Text(_) => "Text"
   | Divider(_) => "Divider"
+  | Spacer(_) => "Spacer"
   | Row(_) => "Row"
   | Section(_) => "Section"
   }

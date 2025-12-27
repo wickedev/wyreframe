@@ -228,36 +228,36 @@ describe("Renderer", () => {
     })
   })
 
-  describe("isNoiseText - Issue #16: Empty lines should be preserved", () => {
-    test("returns false for empty string (empty lines should be preserved)", t => {
+  describe("SemanticParser.isNoiseText - Issue #16: Empty lines should be preserved", () => {
+    test("returns false for empty string (empty lines become Spacer elements)", t => {
       // Empty lines in wireframes should NOT be treated as noise
-      // They represent intentional vertical spacing
-      t->expect(Renderer.isNoiseText(""))->Expect.toBe(false)
+      // They represent intentional vertical spacing (Spacer elements)
+      t->expect(SemanticParser.isNoiseText(""))->Expect.toBe(false)
     })
 
-    test("returns false for whitespace-only string (empty lines should be preserved)", t => {
-      // Lines with only spaces should be preserved as spacing
-      t->expect(Renderer.isNoiseText("   "))->Expect.toBe(false)
+    test("returns false for whitespace-only string (empty lines become Spacer elements)", t => {
+      // Lines with only spaces become Spacer elements
+      t->expect(SemanticParser.isNoiseText("   "))->Expect.toBe(false)
     })
 
     test("returns true for box border patterns with pipes", t => {
-      t->expect(Renderer.isNoiseText("|"))->Expect.toBe(true)
+      t->expect(SemanticParser.isNoiseText("|"))->Expect.toBe(true)
     })
 
     test("returns true for box border patterns with plus", t => {
-      t->expect(Renderer.isNoiseText("+---+"))->Expect.toBe(true)
+      t->expect(SemanticParser.isNoiseText("+---+"))->Expect.toBe(true)
     })
 
     test("returns true for horizontal border", t => {
-      t->expect(Renderer.isNoiseText("---"))->Expect.toBe(true)
+      t->expect(SemanticParser.isNoiseText("---"))->Expect.toBe(true)
     })
 
     test("returns false for actual text content", t => {
-      t->expect(Renderer.isNoiseText("Hello World"))->Expect.toBe(false)
+      t->expect(SemanticParser.isNoiseText("Hello World"))->Expect.toBe(false)
     })
 
     test("returns false for text with surrounding spaces", t => {
-      t->expect(Renderer.isNoiseText("  Sarah Johnson  "))->Expect.toBe(false)
+      t->expect(SemanticParser.isNoiseText("  Sarah Johnson  "))->Expect.toBe(false)
     })
   })
 
@@ -288,7 +288,7 @@ describe("Renderer", () => {
 +------------------------------------------+
 `
 
-    test("parses wireframe and includes spacer elements for empty lines", t => {
+    test("parses wireframe and includes Spacer elements for empty lines", t => {
       let parseResult = Parser.parse(loginWireframe)
 
       switch parseResult {
@@ -296,34 +296,27 @@ describe("Renderer", () => {
           // Get first scene's elements
           switch ast.scenes->Array.get(0) {
           | Some(scene) => {
-              // Count all Text elements and empty text elements
-              let (totalTextCount, spacerCount) =
-                scene.elements->Array.reduce((0, 0), ((totalAcc, spacerAcc), elem) => {
+              // Count Spacer elements
+              let spacerCount =
+                scene.elements->Array.reduce(0, (acc, elem) => {
                   switch elem {
                   | Box({children}) =>
-                    // Count text elements inside the box
-                    children->Array.reduce((totalAcc, spacerAcc), ((tAcc, sAcc), child) => {
+                    // Count Spacer elements inside the box
+                    children->Array.reduce(acc, (count, child) => {
                       switch child {
-                      | Text({content}) => {
-                          let isSpacer = content->String.trim == ""
-                          (tAcc + 1, isSpacer ? sAcc + 1 : sAcc)
-                        }
-                      | _ => (tAcc, sAcc)
+                      | Spacer(_) => count + 1
+                      | _ => count
                       }
                     })
-                  | Text({content}) => {
-                      let isSpacer = content->String.trim == ""
-                      (totalAcc + 1, isSpacer ? spacerAcc + 1 : spacerAcc)
-                    }
-                  | _ => (totalAcc, spacerAcc)
+                  | Spacer(_) => acc + 1
+                  | _ => acc
                   }
                 })
 
               // Log for debugging
-              Console.log2("Total Text elements:", totalTextCount)
-              Console.log2("Spacer (empty) elements:", spacerCount)
+              Console.log2("Spacer elements:", spacerCount)
 
-              // The wireframe has multiple empty lines that should be preserved as spacers
+              // The wireframe has multiple empty lines that should be preserved as Spacers
               // Expecting at least 5 empty lines between content elements
               t->expect(spacerCount >= 5)->Expect.toBe(true)
             }
@@ -332,30 +325,6 @@ describe("Renderer", () => {
         }
       | Error(_) => t->expect(true)->Expect.toBe(false) // Parsing should succeed
       }
-    })
-
-    // Note: renderElement tests require DOM environment (jsdom)
-    // These tests verify the logic using isNoiseText which is the filtering function
-    test("isNoiseText returns false for empty content (spacers should not be filtered)", t => {
-      // Empty content should NOT be considered noise
-      t->expect(Renderer.isNoiseText(""))->Expect.toBe(false)
-    })
-
-    test("isNoiseText returns false for whitespace content (spacers should not be filtered)", t => {
-      // Whitespace-only content should NOT be considered noise
-      t->expect(Renderer.isNoiseText("   "))->Expect.toBe(false)
-    })
-
-    test("empty Text elements are preserved in rendering logic", t => {
-      // Verify the isNoiseText check used in renderElement would preserve empty lines
-      let emptyContent = ""
-      let whitespaceContent = "   "
-
-      // Both should return false (NOT noise = should be rendered)
-      let emptyIsPreserved = !Renderer.isNoiseText(emptyContent)
-      let whitespaceIsPreserved = !Renderer.isNoiseText(whitespaceContent)
-
-      t->expect(emptyIsPreserved && whitespaceIsPreserved)->Expect.toBe(true)
     })
   })
 

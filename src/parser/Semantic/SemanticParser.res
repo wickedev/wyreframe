@@ -1050,8 +1050,28 @@ let segmentToElement = (
 }
 
 /**
+ * Noise text filter - filters out box border characters.
+ * This identifies text that is part of ASCII art borders, not actual content.
+ * Examples: "|", "+---+", "===", etc.
+ */
+let isNoiseText = (content: string): bool => {
+  let trimmed = content->String.trim
+  if trimmed === "" {
+    // Empty lines are not noise - they become Spacer elements
+    false
+  } else {
+    // Box border patterns: +---+, |, ===, etc.
+    let borderPattern = %re("/^[+|=\-\s]+$/")
+    let hasPipeOrPlus = %re("/[+|]/")
+
+    Js.Re.test_(borderPattern, trimmed) || Js.Re.test_(hasPipeOrPlus, trimmed)
+  }
+}
+
+/**
  * Parse a single content line into an element.
  * Handles buttons, links, inline elements, and regular text.
+ * Filters out noise (border characters) and creates Spacer for empty lines.
  */
 let parseContentLine = (
   line: string,
@@ -1062,20 +1082,15 @@ let parseContentLine = (
 ): option<element> => {
   let trimmed = line->String.trim
 
-  // Issue #16: Preserve empty lines as spacer elements for vertical spacing
+  // Issue #16: Preserve empty lines as Spacer elements for vertical spacing
   if trimmed === "" {
-    // Calculate position for the empty line
     let row = contentStartRow + lineIndex
     let baseCol = box.bounds.left + 1
     let position = Position.make(row, baseCol)
-
-    // Create a Text element with empty content to act as a vertical spacer
-    Some(Text({
-      content: "",
-      emphasis: false,
-      position: position,
-      align: Left,
-    }))
+    Some(Spacer({position: position}))
+  } else if isNoiseText(trimmed) {
+    // Filter out border/noise text - don't create any element
+    None
   } else {
     // Calculate position in grid
     let row = contentStartRow + lineIndex
@@ -1360,6 +1375,7 @@ let rec getElementRow = (elem: element): int => {
   | Checkbox({position, _}) => position.row
   | Text({position, _}) => position.row
   | Divider({position}) => position.row
+  | Spacer({position}) => position.row
   | Row({children, _}) => {
       // Use the first child's row position
       switch children->Array.get(0) {

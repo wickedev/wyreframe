@@ -172,23 +172,6 @@ let defaultStyles = `
 // Helper Functions
 // ============================================================================
 
-// Noise text filter - filters out box border characters
-// Note: Empty lines are NOT noise - they represent intentional vertical spacing (Issue #16)
-let isNoiseText = (content: string): bool => {
-  let trimmed = content->String.trim
-  if trimmed == "" {
-    // Empty lines should be preserved as vertical spacing
-    false
-  } else {
-    // Box border patterns: +---+, |, ===, etc.
-    let borderPattern = %re("/^[+|=\-\s]+$/")
-    let hasPipeOrPlus = %re("/[+|]/")
-
-    Js.Re.test_(borderPattern, trimmed) ||
-    Js.Re.test_(hasPipeOrPlus, trimmed)
-  }
-}
-
 // Check if a box contains only inputs (should unwrap and render as inputs directly)
 let isInputOnlyBox = (elem: element): bool => {
   switch elem {
@@ -426,32 +409,27 @@ let rec renderElement = (
     }
 
   | Text({content, emphasis, align, _}) => {
-      // Filter noise text (box borders, etc.)
-      if isNoiseText(content) {
-        None
-      } else {
-        let p = DomBindings.document->DomBindings.createElement("p")
-        p->DomBindings.setClassName("wf-text")
-        if emphasis {
-          p->DomBindings.classList->DomBindings.add("emphasis")
-        }
-        applyAlignment(p, align)
-        // Issue #16: Empty lines should render with visible height as spacers
-        let trimmed = content->String.trim
-        if trimmed === "" {
-          p->DomBindings.classList->DomBindings.add("wf-spacer")
-          p->DomBindings.setInnerHTML("&nbsp;")
-        } else {
-          p->DomBindings.setTextContent(content)
-        }
-        Some(p)
+      // Note: Noise filtering is now done in SemanticParser
+      let p = DomBindings.document->DomBindings.createElement("p")
+      p->DomBindings.setClassName("wf-text")
+      if emphasis {
+        p->DomBindings.classList->DomBindings.add("emphasis")
       }
+      applyAlignment(p, align)
+      p->DomBindings.setTextContent(content)
+      Some(p)
     }
 
   | Divider(_) => {
       let hr = DomBindings.document->DomBindings.createElement("hr")
       hr->DomBindings.setClassName("wf-divider")
       Some(hr)
+    }
+
+  | Spacer(_) => {
+      let spacer = DomBindings.document->DomBindings.createElement("div")
+      spacer->DomBindings.setClassName("wf-spacer")
+      Some(spacer)
     }
 
   | Row({children, align}) => {

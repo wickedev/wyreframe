@@ -61,6 +61,7 @@ let rec collectElementIds = (element: element): Belt.Set.String.t => {
   | Checkbox(_) => ids // Checkboxes don't have explicit IDs
   | Text(_) => ids // Text elements don't have explicit IDs
   | Divider(_) => ids // Dividers don't have IDs
+  | Spacer(_) => ids // Spacers don't have IDs
   | Row({children}) => {
       children->Array.reduce(ids, (acc, child) => {
         Belt.Set.String.union(acc, collectElementIds(child))
@@ -337,6 +338,7 @@ let rec attachInteractionsToElement = (
   | Checkbox(_) as el => el
   | Text(_) as el => el
   | Divider(_) as el => el
+  | Spacer(_) as el => el
   }
 }
 
