@@ -108,7 +108,7 @@ let defaultOptions: renderOptions = {
  * Scene management interface returned by render function.
  */
 type sceneManager = {
-  goto: string => unit,
+  goto: string => bool,
   back: unit => unit,
   forward: unit => unit,
   refresh: unit => unit,
@@ -276,8 +276,9 @@ let deviceTypeToClass = (device: deviceType): string => {
 /**
  * Action handler function type - called when an element's action is triggered.
  * The function receives the action and should execute it (e.g., goto scene).
+ * Returns true if the action was successful, false if it failed (e.g., scene doesn't exist).
  */
-type actionHandler = interactionAction => unit
+type actionHandler = interactionAction => bool
 
 /**
  * Dead end handler function type - called when an element without navigation is clicked.
@@ -360,7 +361,17 @@ let rec renderElement = (
             btn->DomBindings.addEventListener("click", _event => {
               // Execute first action (most common case)
               switch actions->Array.get(0) {
-              | Some(action) => handler(action)
+              | Some(action) => {
+                  let success = handler(action)
+                  // If navigation failed (e.g., target scene doesn't exist),
+                  // treat it as a dead end (Issue #24)
+                  if !success {
+                    switch onDeadEnd {
+                    | Some(deadEndHandler) => deadEndHandler(id, text, #button)
+                    | None => ()
+                    }
+                  }
+                }
               | None => ()
               }
             })
@@ -412,7 +423,17 @@ let rec renderElement = (
               DomBindings.preventDefault(event)
               // Execute first action
               switch actions->Array.get(0) {
-              | Some(action) => handler(action)
+              | Some(action) => {
+                  let success = handler(action)
+                  // If navigation failed (e.g., target scene doesn't exist),
+                  // treat it as a dead end (Issue #24)
+                  if !success {
+                    switch onDeadEnd {
+                    | Some(deadEndHandler) => deadEndHandler(id, text, #link)
+                    | None => ()
+                    }
+                  }
+                }
               | None => ()
               }
             })
@@ -545,6 +566,11 @@ let renderScene = (
 // Scene Manager Implementation
 // ============================================================================
 
+/**
+ * Creates a scene manager for navigation between scenes.
+ * Exported for testing purposes.
+ */
+@genType
 let createSceneManager = (
   scenes: Map.t<string, DomBindings.element>,
   ~onSceneChange: option<onSceneChangeCallback>=?,
@@ -591,17 +617,25 @@ let createSceneManager = (
     }
   }
 
-  let goto = (id: string): unit => {
-    // Add current scene to history before navigating
-    switch currentScene.contents {
-    | Some(currentId) if currentId != id => {
-        historyStack := historyStack.contents->Array.concat([currentId])
-        // Clear forward stack when navigating to new scene
-        forwardStack := []
+  let goto = (id: string): bool => {
+    // Check if target scene exists first
+    if !(scenes->Map.has(id)) {
+      // Scene doesn't exist - return false to indicate failure
+      // Do NOT modify history or switch scenes
+      false
+    } else {
+      // Add current scene to history before navigating
+      switch currentScene.contents {
+      | Some(currentId) if currentId != id => {
+          historyStack := historyStack.contents->Array.concat([currentId])
+          // Clear forward stack when navigating to new scene
+          forwardStack := []
+        }
+      | _ => ()
       }
-    | _ => ()
+      switchToScene(id)
+      true
     }
-    switchToScene(id)
   }
 
   let back = (): unit => {
@@ -746,38 +780,45 @@ let render = (ast: ast, options: option<renderOptions>): renderResult => {
   }
 
   // Create refs to hold navigation functions (set after sceneManager is created)
-  let gotoRef: ref<option<string => unit>> = ref(None)
+  let gotoRef: ref<option<string => bool>> = ref(None)
   let backRef: ref<option<unit => unit>> = ref(None)
   let forwardRef: ref<option<unit => unit>> = ref(None)
 
   // Create action handler that uses the refs
-  let handleAction = (action: interactionAction): unit => {
+  // Returns true if action succeeded, false if it failed (e.g., target scene doesn't exist)
+  let handleAction = (action: interactionAction): bool => {
     switch action {
     | Goto({target, _}) => {
         switch gotoRef.contents {
         | Some(goto) => goto(target)
-        | None => ()
+        | None => false
         }
       }
     | Back => {
         switch backRef.contents {
-        | Some(back) => back()
-        | None => ()
+        | Some(back) => {
+            back()
+            true
+          }
+        | None => false
         }
       }
     | Forward => {
         switch forwardRef.contents {
-        | Some(forward) => forward()
-        | None => ()
+        | Some(forward) => {
+            forward()
+            true
+          }
+        | None => false
         }
       }
     | Validate(_) => {
         // TODO: Implement field validation
-        ()
+        true
       }
     | Call(_) => {
         // TODO: Implement custom function calls
-        ()
+        true
       }
     }
   }
@@ -813,7 +854,9 @@ let render = (ast: ast, options: option<renderOptions>): renderResult => {
 
   if ast.scenes->Array.length > 0 {
     switch ast.scenes->Array.get(0) {
-    | Some(firstScene) => manager.goto(firstScene.id)
+    | Some(firstScene) => {
+        let _ = manager.goto(firstScene.id)
+      }
     | None => ()
     }
   }
