@@ -10,7 +10,7 @@ This document defines the architecture and detailed design for the Wyreframe Syn
 
 - **Version**: 1.1.0
 - **Based on Requirements**: .claude/specs/syntax-v2-parser/requirements.md
-- **Based on Spec**: docs/syntax-v2.md (v2.3.0-draft)
+- **Based on Spec**: Wyreframe Syntax v2.3 Specification
 - **Implementation Language**: ReScript (with @rescript/core)
 - **Created**: 2025-12-27
 - **Updated**: 2025-12-27
@@ -139,7 +139,7 @@ flowchart LR
 ### Module Structure
 
 ```
-src/parser/
+src/parser/v2/
 ├── V2Parser.res             # Public API exports (main entry point)
 ├── types/
 │   ├── V2Types.res          # AST node type definitions
@@ -1417,7 +1417,7 @@ let errorExample: V2Errors.parseError = {
 ```rescript
 // __tests__/elements/ContainerParser_test.res
 
-open Test
+open Vitest
 
 describe("ContainerParser", () => {
   test("should parse container with name", () => {
@@ -1547,19 +1547,19 @@ registry->V2ParserRegistry.register(CustomElementParser.make())
 // registry/EmojiRegistry.res
 
 type t = {
-  mutable mappings: Js.Dict.t<string>,
+  mutable mappings: Dict.t<string>,
 }
 
 let make = (): t => {
-  { mappings: Js.Dict.empty() }
+  { mappings: Dict.make() }
 }
 
 let register = (registry: t, shortcode: string, emoji: string): unit => {
-  registry.mappings->Js.Dict.set(shortcode, emoji)
+  registry.mappings->Dict.set(shortcode, emoji)
 }
 
 let lookup = (registry: t, shortcode: string): option<string> => {
-  registry.mappings->Js.Dict.get(shortcode)
+  registry.mappings->Dict.get(shortcode)
 }
 
 // Default registry with standard emoji
@@ -1703,6 +1703,80 @@ result.warnings->Array.forEach(w => {
 | REQ-20 Extensibility | V2ParserRegistry.res, EmojiRegistry.res | Unit |
 | REQ-21 Error Recovery | Validator.res, synchronization points | Error Recovery |
 | REQ-22 Unicode | PositionUtils.res, UnicodeUtils.res | Unit |
+
+---
+
+## V1/V2 Parser Integration Strategy
+
+### Coexistence Approach
+
+The V2 parser is designed to coexist with the existing V1 parser during the transition period. Both parsers can be used simultaneously without conflicts.
+
+### Directory Structure
+
+```
+src/parser/
+├── Core/                    # Shared types (Position, Bounds) - V1
+├── Semantic/                # V1 parser implementation
+├── Detector/                # V1 element detection
+├── Errors/                  # V1 error handling
+├── Interactions/            # V1 interaction parsing
+├── Fixer/                   # V1 error correction
+├── Parser.res               # V1 entry point
+├── ParserTypes.res          # V1 types
+└── v2/                      # V2 parser (NEW)
+    ├── V2Parser.res         # V2 entry point
+    ├── types/               # V2-specific types
+    ├── lexer/               # V2 lexer
+    ├── parser/              # V2 parser core
+    ├── elements/            # V2 element parsers
+    ├── layout/              # V2 layout inference
+    ├── utils/               # V2 utilities
+    ├── registry/            # V2 registries
+    └── __tests__/           # V2 tests
+```
+
+### Shared Components
+
+The following components from V1 can be potentially reused:
+
+| V1 Component | V2 Equivalent | Reuse Strategy |
+|--------------|---------------|----------------|
+| `Core/Position.res` | `v2/types/V2Types.position` | Consider sharing or aliasing |
+| `Core/Bounds.res` | `v2/types/V2Types.bounds` | Consider sharing or aliasing |
+| `Errors/ErrorTypes.res` | `v2/types/V2Errors.res` | Separate implementations |
+
+### Migration Path
+
+1. **Phase 1 (Current)**: V2 parser development in isolation at `src/parser/v2/`
+2. **Phase 2**: Side-by-side testing - both parsers parse same input, compare results
+3. **Phase 3**: Feature flag to select V1 or V2 parser at runtime
+4. **Phase 4**: V2 becomes default, V1 available as fallback
+5. **Phase 5**: V1 deprecation and removal
+
+### API Compatibility
+
+The V2 parser exports a similar API to V1 for easier migration:
+
+```rescript
+// V1 API
+let parse: string => Parser.parseResult
+
+// V2 API (compatible shape)
+let parse: (string, ~options: parseOptions=?) => V2Types.parseResult
+```
+
+### Type Interoperability
+
+For gradual migration, AST conversion functions may be provided:
+
+```rescript
+// Future: Convert V2 AST to V1 format for compatibility
+let v2ToV1: V2Types.astNode => ParserTypes.astNode
+
+// Future: Convert V1 AST to V2 format for upgrade
+let v1ToV2: ParserTypes.astNode => V2Types.astNode
+```
 
 ---
 

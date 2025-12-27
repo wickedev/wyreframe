@@ -7,7 +7,7 @@ This document defines the requirements for the Wyreframe Syntax v2.3 Parser. The
 ### Document Information
 
 - **Version**: 1.0.0
-- **Based on Spec**: docs/syntax-v2.md (v2.3.0-draft)
+- **Based on Spec**: Wyreframe Syntax v2.3 Specification
 - **Created**: 2025-12-27
 - **Status**: Draft
 
@@ -34,7 +34,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to recognize and parse @scene and @component blocks, so that I can identify the top-level structure of the wireframe.
 
-**Reference**: docs/syntax-v2.md - Block Types section
+**Reference**: Wyreframe Syntax v2.3 - Block Types section
 
 #### Acceptance Criteria
 
@@ -58,7 +58,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse box-shaped Container syntax, so that I can understand the layout structure and nesting relationships.
 
-**Reference**: docs/syntax-v2.md - Container section
+**Reference**: Wyreframe Syntax v2.3 - Container section
 
 #### Acceptance Criteria
 
@@ -80,7 +80,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to recognize IDs assigned to Containers, so that those elements can be referenced in DSL.
 
-**Reference**: docs/syntax-v2.md - ID System section
+**Reference**: Wyreframe Syntax v2.3 - ID System section
 
 #### Acceptance Criteria
 
@@ -102,7 +102,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse plain text content, so that I can extract text elements from the UI.
 
-**Reference**: docs/syntax-v2.md - Text section
+**Reference**: Wyreframe Syntax v2.3 - Text section
 
 #### Acceptance Criteria
 
@@ -118,7 +118,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `[ text ]` format button syntax, so that I can identify clickable action buttons.
 
-**Reference**: docs/syntax-v2.md - Button section
+**Reference**: Wyreframe Syntax v2.3 - Button section
 
 #### Acceptance Criteria
 
@@ -138,7 +138,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `< text >` format link syntax, so that I can identify navigation links.
 
-**Reference**: docs/syntax-v2.md - Link section
+**Reference**: Wyreframe Syntax v2.3 - Link section
 
 #### Acceptance Criteria
 
@@ -154,7 +154,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `[__fieldname__]` format input field syntax, so that I can identify text input elements.
 
-**Reference**: docs/syntax-v2.md - Input section
+**Reference**: Wyreframe Syntax v2.3 - Input section
 
 #### Acceptance Criteria
 
@@ -174,7 +174,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `[v: Placeholder]` format dropdown syntax, so that I can identify select elements.
 
-**Reference**: docs/syntax-v2.md - Select section
+**Reference**: Wyreframe Syntax v2.3 - Select section
 
 #### Acceptance Criteria
 
@@ -190,7 +190,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `[x]`, `[X]`, `[v]`, `[V]`, `[ ]` format checkbox syntax, so that I can identify checkbox elements.
 
-**Reference**: docs/syntax-v2.md - Checkbox section
+**Reference**: Wyreframe Syntax v2.3 - Checkbox section
 
 #### Acceptance Criteria
 
@@ -210,7 +210,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `(*)`, `( )` format radio button syntax, so that I can identify single-select elements.
 
-**Reference**: docs/syntax-v2.md - Radio section
+**Reference**: Wyreframe Syntax v2.3 - Radio section
 
 #### Acceptance Criteria
 
@@ -234,7 +234,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `---`, `===` format divider syntax, so that I can identify section separator elements.
 
-**Reference**: docs/syntax-v2.md - Divider section
+**Reference**: Wyreframe Syntax v2.3 - Divider section
 
 #### Acceptance Criteria
 
@@ -258,7 +258,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `"text"` format string literals, so that I can handle text including special characters and line breaks.
 
-**Reference**: docs/syntax-v2.md - String Literals section
+**Reference**: Wyreframe Syntax v2.3 - String Literals section
 
 #### Acceptance Criteria
 
@@ -284,7 +284,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `:name:` format emoji shortcodes, so that I can display emojis in the UI.
 
-**Reference**: docs/syntax-v2.md - Emoji Shortcodes section
+**Reference**: Wyreframe Syntax v2.3 - Emoji Shortcodes section
 
 #### Acceptance Criteria
 
@@ -300,7 +300,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse `${prop}` format prop placeholders, so that I can handle dynamic values in components.
 
-**Reference**: docs/syntax-v2.md - Prop Placeholder Syntax section
+**Reference**: Wyreframe Syntax v2.3 - Prop Placeholder Syntax section
 
 #### Acceptance Criteria
 
@@ -318,7 +318,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to infer implicit layout based on element positions, so that I can understand the arrangement without explicit layout specification.
 
-**Reference**: docs/syntax-v2.md - Implicit Layout Examples section
+**Reference**: Wyreframe Syntax v2.3 - Implicit Layout Examples section
 
 #### Acceptance Criteria
 
@@ -336,7 +336,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to parse elements according to defined priorities, so that ambiguous patterns are interpreted correctly.
 
-**Reference**: docs/syntax-v2.md - Parsing Rules section
+**Reference**: Wyreframe Syntax v2.3 - Parsing Rules section
 
 #### Acceptance Criteria
 
@@ -366,7 +366,7 @@ The Parser does NOT handle the following:
 
 **User Story:** As a developer, I want the Parser to clearly report syntax errors, so that I can easily identify problems when writing wireframes.
 
-**Reference**: docs/syntax-v2.md - Error Cases section
+**Reference**: Wyreframe Syntax v2.3 - Error Cases section
 
 #### Acceptance Criteria
 
