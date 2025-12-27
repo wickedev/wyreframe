@@ -8,10 +8,12 @@ This document defines the architecture and detailed design for the Wyreframe Syn
 
 ### Document Information
 
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Based on Requirements**: .claude/specs/syntax-v2-parser/requirements.md
 - **Based on Spec**: docs/syntax-v2.md (v2.3.0-draft)
+- **Implementation Language**: ReScript (with @rescript/core)
 - **Created**: 2025-12-27
+- **Updated**: 2025-12-27
 - **Status**: Draft
 
 ### Design Scope
@@ -43,30 +45,30 @@ graph TB
     end
 
     subgraph "Parser Pipeline"
-        LEXER[Lexer<br/>Tokenizer]
-        PARSER[Parser<br/>Recursive Descent]
+        LEXER[Lexer<br/>Tokenizer.res]
+        PARSER[Parser<br/>BlockParser.res]
 
         subgraph "Element Parsers"
-            EP_CONTAINER[ContainerParser]
-            EP_TEXT[TextParser]
-            EP_BUTTON[ButtonParser]
-            EP_LINK[LinkParser]
-            EP_INPUT[InputParser]
-            EP_SELECT[SelectParser]
-            EP_CHECKBOX[CheckboxParser]
-            EP_RADIO[RadioParser]
-            EP_DIVIDER[DividerParser]
-            EP_STRING[StringParser]
-            EP_EMOJI[EmojiParser]
-            EP_PROP[PropPlaceholderParser]
+            EP_CONTAINER[ContainerParser.res]
+            EP_TEXT[TextParser.res]
+            EP_BUTTON[ButtonParser.res]
+            EP_LINK[LinkParser.res]
+            EP_INPUT[InputParser.res]
+            EP_SELECT[SelectParser.res]
+            EP_CHECKBOX[CheckboxParser.res]
+            EP_RADIO[RadioParser.res]
+            EP_DIVIDER[DividerParser.res]
+            EP_STRING[StringParser.res]
+            EP_EMOJI[EmojiParser.res]
+            EP_PROP[PropPlaceholderParser.res]
         end
 
-        LAYOUT[LayoutInferrer<br/>Implicit Layout Detection]
-        VALIDATOR[Validator<br/>Error Collection]
+        LAYOUT[LayoutInferrer.res<br/>Implicit Layout Detection]
+        VALIDATOR[Validator.res<br/>Error Collection]
     end
 
     subgraph Output
-        AST[AST<br/>Abstract Syntax Tree]
+        AST[AST<br/>V2Types.res]
         ERRORS[ParseResult<br/>errors + warnings]
     end
 
@@ -120,15 +122,15 @@ flowchart LR
     end
 
     subgraph "Phase 3: Element Parsing"
-        E --> H[Priority Matcher]
+        E --> H[PriorityMatcher.res]
         F --> H
         H --> I[Element Parsers]
         I --> J[Raw AST Nodes]
     end
 
     subgraph "Phase 4: Layout & Validation"
-        J --> K[Layout Inferrer]
-        K --> L[Validator]
+        J --> K[LayoutInferrer.res]
+        K --> L[Validator.res]
         L --> M[Final AST]
         L --> N[Errors/Warnings]
     end
@@ -138,55 +140,54 @@ flowchart LR
 
 ```
 src/parser/
-├── index.ts                 # Public API exports
+├── V2Parser.res             # Public API exports (main entry point)
 ├── types/
-│   ├── ast.ts               # AST node type definitions
-│   ├── tokens.ts            # Token type definitions
-│   ├── errors.ts            # Error/Warning type definitions
-│   └── options.ts           # Parser options interface
+│   ├── V2Types.res          # AST node type definitions
+│   ├── Token.res            # Token type definitions
+│   └── V2Errors.res         # Error/Warning type definitions
 ├── lexer/
-│   ├── index.ts             # Lexer main class
-│   ├── scanner.ts           # Character scanner
-│   └── token-stream.ts      # Token stream utilities
+│   ├── Lexer.res            # Lexer main module
+│   ├── Scanner.res          # Character scanner
+│   └── TokenStream.res      # Token stream utilities
 ├── parser/
-│   ├── index.ts             # Main parser class
-│   ├── context.ts           # Parse context (scene/component)
-│   ├── priority-matcher.ts  # Priority-based pattern matching
-│   └── block-parser.ts      # Block type parser
+│   ├── BlockParser.res      # Block type parser (@scene, @component)
+│   ├── ParseContext.res     # Parse context (scene/component state)
+│   └── PriorityMatcher.res  # Priority-based pattern matching
 ├── elements/
-│   ├── index.ts             # Element parser registry
-│   ├── container.ts         # Container parser
-│   ├── text.ts              # Text parser
-│   ├── button.ts            # Button parser
-│   ├── link.ts              # Link parser
-│   ├── input.ts             # Input parser
-│   ├── select.ts            # Select parser
-│   ├── checkbox.ts          # Checkbox parser
-│   ├── radio.ts             # Radio parser
-│   ├── divider.ts           # Divider parser
-│   ├── string-literal.ts    # String parser
-│   ├── emoji.ts             # Emoji shortcode parser
-│   └── prop-placeholder.ts  # PropPlaceholder parser
+│   ├── V2ElementParser.res  # Element parser interface
+│   ├── V2ParserRegistry.res # Element parser registry
+│   ├── ContainerParser.res  # Container parser (+--name--+)
+│   ├── TextParser.res       # Text parser (fallback)
+│   ├── ButtonParser.res     # Button parser ([ text ])
+│   ├── LinkParser.res       # Link parser (< text >)
+│   ├── InputParser.res      # Input parser ([__field__])
+│   ├── SelectParser.res     # Select parser ([v: placeholder])
+│   ├── CheckboxParser.res   # Checkbox parser ([x], [ ])
+│   ├── RadioParser.res      # Radio parser ((*), ( ))
+│   ├── DividerParser.res    # Divider parser (---, ===)
+│   ├── StringParser.res     # String literal parser ("...")
+│   ├── EmojiParser.res      # Emoji shortcode parser (:name:)
+│   └── PropPlaceholderParser.res  # PropPlaceholder parser (${prop})
 ├── layout/
-│   ├── index.ts             # Layout inferrer
-│   └── grouping.ts          # Radio/element grouping
+│   ├── LayoutInferrer.res   # Layout inference
+│   └── RadioGrouper.res     # Radio button grouping
 ├── utils/
-│   ├── position.ts          # Line/column tracking
-│   ├── slug.ts              # Text to slug conversion
-│   ├── unicode.ts           # Unicode utilities
-│   └── escape.ts            # Escape sequence handling
+│   ├── PositionUtils.res    # Line/column tracking utilities
+│   ├── Slugify.res          # Text to slug conversion
+│   ├── UnicodeUtils.res     # Unicode utilities
+│   └── EscapeUtils.res      # Escape sequence handling
 ├── registry/
-│   ├── emoji-registry.ts    # Emoji shortcode mappings
-│   └── element-registry.ts  # Element parser registration
+│   ├── EmojiRegistry.res    # Emoji shortcode mappings
+│   └── ElementRegistry.res  # Element parser registration
 └── __tests__/
-    ├── lexer.test.ts
-    ├── parser.test.ts
+    ├── Lexer_test.res
+    ├── Parser_test.res
     ├── elements/
-    │   ├── container.test.ts
-    │   ├── button.test.ts
+    │   ├── ContainerParser_test.res
+    │   ├── ButtonParser_test.res
     │   └── ...
     └── integration/
-        └── full-parse.test.ts
+        └── FullParse_test.res
 ```
 
 ---
@@ -203,28 +204,82 @@ src/parser/
 
 **Interfaces:**
 
-```typescript
-interface Lexer {
-  tokenize(source: string): TokenStream;
-  peek(): Token;
-  next(): Token;
-  lookAhead(count: number): Token;
-  getPosition(): Position;
+```rescript
+// types/Token.res
+
+/** Token position in source */
+type position = {
+  line: int,    // 1-based line number
+  column: int,  // 1-based column number (Unicode-aware)
+  offset: int,  // 0-based character offset
 }
 
-interface TokenStream {
-  tokens: Token[];
-  current: number;
-  peek(): Token;
-  next(): Token;
-  lookAhead(n: number): Token;
-  rewind(position: number): void;
+/** Token types */
+type tokenType =
+  | Identifier
+  | Punctuation
+  | Whitespace
+  | Newline
+  | String
+  | Number
+  | EOF
+
+/** Token record */
+type t = {
+  tokenType: tokenType,
+  value: string,
+  position: position,
 }
+
+// lexer/Lexer.res
+
+/** Lexer module type */
+type t = {
+  source: string,
+  mutable current: int,
+  mutable line: int,
+  mutable column: int,
+}
+
+/** Create a new lexer from source text */
+let make: string => t
+
+/** Tokenize entire source */
+let tokenize: t => TokenStream.t
+
+/** Peek at current token without consuming */
+let peek: t => Token.t
+
+/** Consume and return current token */
+let next: t => Token.t
+
+/** Look ahead n tokens */
+let lookAhead: (t, int) => Token.t
+
+/** Get current position */
+let getPosition: t => Token.position
+```
+
+```rescript
+// lexer/TokenStream.res
+
+/** Token stream type */
+type t = {
+  tokens: array<Token.t>,
+  mutable current: int,
+}
+
+let make: array<Token.t> => t
+let peek: t => Token.t
+let next: t => Token.t
+let lookAhead: (t, int) => Token.t
+let rewind: (t, int) => unit
+let isAtEnd: t => bool
 ```
 
 **Dependencies:**
-- `Position` from utils/position.ts
-- `Token` types from types/tokens.ts
+- `Token` from types/Token.res
+- `Position` utilities from utils/PositionUtils.res
 
 ---
 
@@ -239,26 +294,63 @@ interface TokenStream {
 
 **Interfaces:**
 
-```typescript
-interface Parser {
-  parse(source: string, options?: ParseOptions): ParseResult;
-  parseBlock(): BlockNode;
-  parseContent(context: ParseContext): ASTNode[];
+```rescript
+// parser/ParseContext.res
+
+/** Block type variant */
+type blockType =
+  | Scene
+  | Component
+
+/** Prop definition for components */
+type propDefinition = {
+  name: string,
+  optional: bool,
+  defaultValue: option<string>,
 }
 
-interface ParseContext {
-  blockType: 'scene' | 'component';
-  blockId: string;
-  props?: PropDefinition[];
-  currentContainer?: ContainerNode;
-  errors: ParseError[];
-  warnings: ParseWarning[];
+/** Parse context record */
+type t = {
+  blockType: blockType,
+  blockId: string,
+  props: array<propDefinition>,
+  mutable currentContainer: option<V2Types.containerNode>,
+  mutable errors: array<V2Errors.parseError>,
+  mutable warnings: array<V2Errors.parseWarning>,
 }
+
+let make: (~blockType: blockType, ~blockId: string) => t
+let addError: (t, V2Errors.parseError) => unit
+let addWarning: (t, V2Errors.parseWarning) => unit
+let setCurrentContainer: (t, option<V2Types.containerNode>) => unit
+```
+
+```rescript
+// parser/BlockParser.res
+
+/** Parse options */
+type parseOptions = {
+  strict: bool,
+  emojiRegistry: option<EmojiRegistry.t>,
+  tabSize: int,
+  maxDepth: int,
+}
+
+let defaultOptions: parseOptions
+
+/** Main parse function */
+let parse: (string, ~options: parseOptions=?) => V2Types.parseResult
+
+/** Parse a single block */
+let parseBlock: (TokenStream.t, ParseContext.t) => V2Types.blockNode
+
+/** Parse content within a block */
+let parseContent: (TokenStream.t, ParseContext.t) => array<V2Types.astNode>
 ```
 
 **Dependencies:**
 - `Lexer` for tokenization
-- `ElementParserRegistry` for element parsing
+- `V2ParserRegistry` for element parsing
 - `LayoutInferrer` for layout detection
 
 ---
@@ -272,20 +364,53 @@ interface ParseContext {
 
 **Interfaces:**
 
-```typescript
-interface ElementParserRegistry {
-  register(parser: ElementParser): void;
-  unregister(type: ElementType): void;
-  getParserByPriority(): ElementParser[];
-  tryParse(context: ParseContext, lexer: Lexer): ASTNode | null;
+```rescript
+// elements/V2ElementParser.res
+
+/** Parse result - Some(element) if successful, None if pattern doesn't match */
+type parseResult = option<V2Types.elementNode>
+
+/** Element parser interface (record type) */
+type t = {
+  elementType: V2Types.nodeType,
+  priority: int,
+  canParse: TokenStream.t => bool,
+  parse: (ParseContext.t, TokenStream.t) => parseResult,
 }
 
-interface ElementParser {
-  readonly type: ElementType;
-  readonly priority: number;
-  canParse(lexer: Lexer): boolean;
-  parse(context: ParseContext, lexer: Lexer): ASTNode;
+/** Helper to create an element parser */
+let make: (
+  ~elementType: V2Types.nodeType,
+  ~priority: int,
+  ~canParse: TokenStream.t => bool,
+  ~parse: (ParseContext.t, TokenStream.t) => parseResult,
+) => t
+```
+
+```rescript
+// elements/V2ParserRegistry.res
+
+/** Registry type */
+type t = {
+  mutable parsers: array<V2ElementParser.t>,
 }
+
+let make: unit => t
+
+/** Register an element parser (auto-sorted by priority) */
+let register: (t, V2ElementParser.t) => unit
+
+/** Unregister a parser by element type */
+let unregister: (t, V2Types.nodeType) => unit
+
+/** Get all parsers sorted by priority (descending) */
+let getParsersByPriority: t => array<V2ElementParser.t>
+
+/** Try to parse using registered parsers */
+let tryParse: (t, ParseContext.t, TokenStream.t) => option<V2Types.astNode>
+
+/** Create registry with all default parsers */
+let makeDefault: unit => t
 ```
 
 **Dependencies:**
@@ -304,26 +429,39 @@ interface ElementParser {
 
 **Interfaces:**
 
-```typescript
-interface ContainerParser extends ElementParser {
-  readonly priority: 10;
-  parseTopBorder(lexer: Lexer): ContainerBorderInfo;
-  parseContainerContent(context: ParseContext, lexer: Lexer): ASTNode[];
-  parseBottomBorder(lexer: Lexer): void;
-  extractContainerId(borderInfo: ContainerBorderInfo, content: ASTNode[]): string | null;
+```rescript
+// elements/ContainerParser.res
+
+/** Container border info extracted from top border */
+type containerBorderInfo = {
+  name: option<string>,
+  id: option<string>,  // Format 1 ID from border
+  width: int,
+  position: Token.position,
 }
 
-interface ContainerBorderInfo {
-  name: string | null;
-  id: string | null;  // Format 1 ID
-  width: number;
-  position: Position;
-}
+/** Priority constant */
+let priority: int  // 10
+
+/** Parse top border and extract info */
+let parseTopBorder: TokenStream.t => option<containerBorderInfo>
+
+/** Parse container content recursively */
+let parseContainerContent: (ParseContext.t, TokenStream.t) => array<V2Types.astNode>
+
+/** Parse bottom border */
+let parseBottomBorder: TokenStream.t => result<unit, V2Errors.errorCode>
+
+/** Extract container ID from border info and content */
+let extractContainerId: (containerBorderInfo, array<V2Types.astNode>) => option<string>
+
+/** Create a ContainerParser instance */
+let make: unit => V2ElementParser.t
 ```
 
 **Dependencies:**
-- `Lexer` for tokenization
-- `ElementParserRegistry` for nested content parsing
+- `TokenStream` for tokenization
+- `V2ParserRegistry` for nested content parsing
 
 ---
 
@@ -336,37 +474,46 @@ interface ContainerBorderInfo {
 
 **Interfaces:**
 
-```typescript
-interface PriorityMatcher {
-  readonly priorityOrder: readonly number[];
-  match(lexer: Lexer): ElementParser | null;
-  getParsersInOrder(): ElementParser[];
+```rescript
+// parser/PriorityMatcher.res
+
+/** Priority constants module */
+module Priority = {
+  let string: int          // 115 - "..." (supports multiline)
+  let containerId: int     // 110
+  let propPlaceholder: int // 105
+  let emoji: int           // 100
+  let select: int          // 95
+  let input: int           // 90
+  let radio: int           // 85
+  let checkbox: int        // 80
+  let button: int          // 70
+  let link: int            // 60
+  let dividerLabeledBold: int // 50
+  let dividerLabeled: int  // 48
+  let dividerId: int       // 45
+  let divider: int         // 40
+  let container: int       // 10
+  let text: int            // 1 (fallback)
 }
 
-// Priority constants
-const PRIORITY = {
-  STRING: 115,           // "..." (supports multiline)
-  CONTAINER_ID: 110,
-  PROP_PLACEHOLDER: 105,
-  EMOJI: 100,
-  SELECT: 95,
-  INPUT: 90,
-  RADIO: 85,
-  CHECKBOX: 80,
-  BUTTON: 70,
-  LINK: 60,
-  DIVIDER_LABELED_BOLD: 50,
-  DIVIDER_LABELED: 48,
-  DIVIDER_ID: 45,
-  DIVIDER: 40,
-  CONTAINER: 10,
-  TEXT: 1,
-} as const;
+/** Priority matcher type */
+type t = {
+  registry: V2ParserRegistry.t,
+}
+
+let make: V2ParserRegistry.t => t
+
+/** Match token stream against parsers in priority order */
+let match_: (t, TokenStream.t) => option<V2ElementParser.t>
+
+/** Get all parsers sorted by priority */
+let getParsersInOrder: t => array<V2ElementParser.t>
 ```
 
 **Dependencies:**
-- `ElementParserRegistry`
-- `Lexer` for pattern checking
+- `V2ParserRegistry`
+- `TokenStream` for pattern checking
 
 ---
 
@@ -380,23 +527,52 @@ const PRIORITY = {
 
 **Interfaces:**
 
-```typescript
-interface LayoutInferrer {
-  inferLayout(nodes: ASTNode[]): LayoutInfo;
-  groupRadioButtons(nodes: RadioNode[]): RadioGroup[];
-  calculateDistribution(nodes: ASTNode[], containerWidth: number): Distribution;
+```rescript
+// layout/LayoutInferrer.res
+
+/** Layout direction */
+type direction =
+  | Row
+  | Column
+  | Mixed
+
+/** Element group */
+type elementGroup = {
+  direction: direction,
+  children: array<V2Types.astNode>,
+  startLine: int,
 }
 
-interface LayoutInfo {
-  direction: 'row' | 'column' | 'mixed';
-  groups: ElementGroup[];
+/** Layout info */
+type layoutInfo = {
+  direction: direction,
+  groups: array<elementGroup>,
 }
 
-interface ElementGroup {
-  direction: 'row' | 'column';
-  children: ASTNode[];
-  startLine: number;
+/** Radio group */
+type radioGroup = {
+  id: string,
+  members: array<V2Types.radioNode>,
 }
+
+/** Infer layout from AST nodes */
+let inferLayout: array<V2Types.astNode> => layoutInfo
+
+/** Group radio buttons */
+let groupRadioButtons: array<V2Types.radioNode> => array<radioGroup>
+
+/** Calculate distribution within container */
+let calculateDistribution: (array<V2Types.astNode>, int) => V2Types.distribution
+```
+
+```rescript
+// layout/RadioGrouper.res
+
+/** Group radio buttons by proximity */
+let groupByProximity: array<V2Types.radioNode> => array<array<V2Types.radioNode>>
+
+/** Assign group IDs to radio buttons */
+let assignGroupIds: array<array<V2Types.radioNode>> => array<V2Types.radioNode>
 ```
 
 **Dependencies:**
@@ -413,18 +589,24 @@ interface ElementGroup {
 
 **Interfaces:**
 
-```typescript
-interface Validator {
-  validate(ast: ASTNode, context: ParseContext): ValidationResult;
-  collectErrors(): ParseError[];
-  collectWarnings(): ParseWarning[];
+```rescript
+// validator/Validator.res
+
+/** Validation result */
+type validationResult = {
+  valid: bool,
+  errors: array<V2Errors.parseError>,
+  warnings: array<V2Errors.parseWarning>,
 }
 
-interface ValidationResult {
-  valid: boolean;
-  errors: ParseError[];
-  warnings: ParseWarning[];
-}
+/** Validate AST node */
+let validate: (V2Types.astNode, ParseContext.t) => validationResult
+
+/** Collect all errors from context */
+let collectErrors: ParseContext.t => array<V2Errors.parseError>
+
+/** Collect all warnings from context */
+let collectWarnings: ParseContext.t => array<V2Errors.parseWarning>
 ```
 
 **Dependencies:**
@@ -437,377 +619,495 @@ interface ValidationResult {
 
 ### Core AST Type Definitions
 
-```typescript
+```rescript
+// types/V2Types.res
+
 // =============================================================================
 // Base Types
 // =============================================================================
 
-interface Position {
-  line: number;      // 1-based line number
-  column: number;    // 1-based column number (Unicode-aware)
-  offset: number;    // 0-based character offset
+/** Position in source */
+type position = {
+  line: int,      // 1-based line number
+  column: int,    // 1-based column number (Unicode-aware)
+  offset: int,    // 0-based character offset
 }
 
-interface SourceLocation {
-  start: Position;
-  end: Position;
+/** Source location span */
+type sourceLocation = {
+  start: position,
+  end_: position,  // 'end' is reserved in ReScript
 }
 
-interface BaseNode {
-  type: NodeType;
-  location: SourceLocation;
-}
-
-type NodeType =
-  | 'Scene'
-  | 'Component'
-  | 'Container'
-  | 'Text'
-  | 'Button'
-  | 'Link'
-  | 'Input'
-  | 'Select'
-  | 'Checkbox'
-  | 'Radio'
-  | 'Divider'
-  | 'String'       // supports multiline content
-  | 'Emoji'
-  | 'PropPlaceholder'
-  | 'Error';
+/** Node type variant */
+type nodeType =
+  | Scene
+  | Component
+  | Container
+  | Text
+  | Button
+  | Link
+  | Input
+  | Select
+  | Checkbox
+  | Radio
+  | Divider
+  | String        // supports multiline content
+  | Emoji
+  | PropPlaceholder
+  | Error
 
 // =============================================================================
 // Block Nodes
 // =============================================================================
 
-interface SceneNode extends BaseNode {
-  type: 'Scene';
-  slug: string;
-  title?: string;
-  device?: 'mobile' | 'tablet' | 'desktop';
-  transition?: string;
-  children: ASTNode[];
-  layout: LayoutInfo;
+/** Device type variant */
+type deviceType =
+  | Mobile
+  | Tablet
+  | Desktop
+
+/** Prop definition */
+type propDefinition = {
+  name: string,
+  optional: bool,
+  defaultValue: option<string>,
 }
 
-interface ComponentNode extends BaseNode {
-  type: 'Component';
-  slug: string;
-  props: PropDefinition[];
-  children: ASTNode[];
-  layout: LayoutInfo;
+/** Layout direction */
+type layoutDirection =
+  | Row
+  | Column
+  | Mixed
+
+/** Layout info */
+type rec layoutInfo = {
+  direction: layoutDirection,
+  groups: array<elementGroup>,
 }
 
-interface PropDefinition {
-  name: string;
-  optional: boolean;
-  defaultValue?: string;
+and elementGroup = {
+  direction: layoutDirection,
+  children: array<astNode>,
+  startLine: int,
+}
+
+// Forward declaration for recursive types
+and astNode =
+  | SceneNode(sceneNode)
+  | ComponentNode(componentNode)
+  | ContainerNode(containerNode)
+  | TextNode(textNode)
+  | ButtonNode(buttonNode)
+  | LinkNode(linkNode)
+  | InputNode(inputNode)
+  | SelectNode(selectNode)
+  | CheckboxNode(checkboxNode)
+  | RadioNode(radioNode)
+  | DividerNode(dividerNode)
+  | StringNode(stringNode)
+  | EmojiNode(emojiNode)
+  | PropPlaceholderNode(propPlaceholderNode)
+  | ErrorNode(errorNode)
+
+and sceneNode = {
+  location: sourceLocation,
+  slug: string,
+  title: option<string>,
+  device: option<deviceType>,
+  transition: option<string>,
+  children: array<astNode>,
+  layout: layoutInfo,
+}
+
+and componentNode = {
+  location: sourceLocation,
+  slug: string,
+  props: array<propDefinition>,
+  children: array<astNode>,
+  layout: layoutInfo,
 }
 
 // =============================================================================
 // Element Nodes
 // =============================================================================
 
-interface ContainerNode extends BaseNode {
-  type: 'Container';
-  id?: string;
-  name?: string;
-  children: ASTNode[];
-  layout: LayoutInfo;
-  bounds: Bounds;
+and bounds = {
+  x: int,
+  y: int,
+  width: int,
+  height: int,
 }
 
-interface Bounds {
-  x: number;
-  y: number;
-  width: number;
-  height: number;
+and containerNode = {
+  location: sourceLocation,
+  id: option<string>,
+  name: option<string>,
+  children: array<astNode>,
+  layout: layoutInfo,
+  bounds: bounds,
 }
 
-interface TextNode extends BaseNode {
-  type: 'Text';
-  content: string;
-  align: 'Left' | 'Center' | 'Right';
+/** Alignment type */
+and alignment =
+  | Left
+  | Center
+  | Right
+
+and textNode = {
+  location: sourceLocation,
+  content: string,
+  align: alignment,
 }
 
-interface ButtonNode extends BaseNode {
-  type: 'Button';
-  id: string;        // auto-generated slug from text
-  text: string;
+and buttonNode = {
+  location: sourceLocation,
+  id: string,        // auto-generated slug from text
+  text: string,
 }
 
-interface LinkNode extends BaseNode {
-  type: 'Link';
-  id: string;        // auto-generated slug from text
-  text: string;
+and linkNode = {
+  location: sourceLocation,
+  id: string,        // auto-generated slug from text
+  text: string,
 }
 
-interface InputNode extends BaseNode {
-  type: 'Input';
-  placeholder: string;
+and inputNode = {
+  location: sourceLocation,
+  placeholder: string,
 }
 
-interface SelectNode extends BaseNode {
-  type: 'Select';
-  id: string;        // auto-generated slug from placeholder
-  placeholder: string;
+and selectNode = {
+  location: sourceLocation,
+  id: string,        // auto-generated slug from placeholder
+  placeholder: string,
 }
 
-interface CheckboxNode extends BaseNode {
-  type: 'Checkbox';
-  checked: boolean;
-  label: string;
+and checkboxNode = {
+  location: sourceLocation,
+  checked: bool,
+  label: string,
 }
 
-interface RadioNode extends BaseNode {
-  type: 'Radio';
-  selected: boolean;
-  label: string;
-  group?: string;    // inferred group ID
+and radioNode = {
+  location: sourceLocation,
+  selected: bool,
+  label: string,
+  group: option<string>,    // inferred group ID
 }
 
-interface DividerNode extends BaseNode {
-  type: 'Divider';
-  style: 'normal' | 'bold';
-  id?: string;
-  label?: string;
+/** Divider style */
+and dividerStyle =
+  | Normal
+  | Bold
+
+and dividerNode = {
+  location: sourceLocation,
+  style: dividerStyle,
+  id: option<string>,
+  label: option<string>,
 }
 
 // =============================================================================
 // Special Nodes
 // =============================================================================
 
-interface StringNode extends BaseNode {
-  type: 'String';
-  content: string;                                    // supports multiline content
-  interpolations: (string | PropPlaceholderNode)[];
-  multiline: boolean;                                 // true if contains newlines
+/** String interpolation content */
+and interpolationContent =
+  | Literal(string)
+  | Placeholder(propPlaceholderNode)
+
+and stringNode = {
+  location: sourceLocation,
+  content: string,                              // supports multiline content
+  interpolations: array<interpolationContent>,
+  multiline: bool,                              // true if contains newlines
 }
 
-interface EmojiNode extends BaseNode {
-  type: 'Emoji';
-  shortcode: string;
-  emoji: string;      // resolved Unicode emoji
+and emojiNode = {
+  location: sourceLocation,
+  shortcode: string,
+  emoji: string,      // resolved Unicode emoji
 }
 
-interface PropPlaceholderNode extends BaseNode {
-  type: 'PropPlaceholder';
-  name: string;
-  required: boolean;
-  defaultValue?: string;
+and propPlaceholderNode = {
+  location: sourceLocation,
+  name: string,
+  required: bool,
+  defaultValue: option<string>,
 }
 
-interface ErrorNode extends BaseNode {
-  type: 'Error';
-  message: string;
-  recoveredContent?: string;
+and errorNode = {
+  location: sourceLocation,
+  message: string,
+  recoveredContent: option<string>,
 }
 
 // =============================================================================
-// Union Types
+// Type Aliases
 // =============================================================================
 
-type BlockNode = SceneNode | ComponentNode;
+type blockNode =
+  | SceneBlock(sceneNode)
+  | ComponentBlock(componentNode)
 
-type ElementNode =
-  | ContainerNode
-  | TextNode
-  | ButtonNode
-  | LinkNode
-  | InputNode
-  | SelectNode
-  | CheckboxNode
-  | RadioNode
-  | DividerNode;
+type elementNode =
+  | Element_Container(containerNode)
+  | Element_Text(textNode)
+  | Element_Button(buttonNode)
+  | Element_Link(linkNode)
+  | Element_Input(inputNode)
+  | Element_Select(selectNode)
+  | Element_Checkbox(checkboxNode)
+  | Element_Radio(radioNode)
+  | Element_Divider(dividerNode)
 
-type SpecialNode =
-  | StringNode
-  | EmojiNode
-  | PropPlaceholderNode;
-
-type ASTNode = BlockNode | ElementNode | SpecialNode | ErrorNode;
+type specialNode =
+  | Special_String(stringNode)
+  | Special_Emoji(emojiNode)
+  | Special_PropPlaceholder(propPlaceholderNode)
 
 // =============================================================================
-// Layout Types
+// Distribution Types
 // =============================================================================
 
-interface LayoutInfo {
-  direction: 'row' | 'column' | 'mixed';
-  groups: ElementGroup[];
-}
+type distribution =
+  | Equal
+  | SpaceBetween
+  | SpaceAround
+  | Start
+  | End
+  | Center
 
-interface ElementGroup {
-  direction: 'row' | 'column';
-  children: ASTNode[];
-  startLine: number;
-}
+// =============================================================================
+// Radio Group
+// =============================================================================
 
-interface RadioGroup {
-  id: string;
-  members: RadioNode[];
+type radioGroup = {
+  id: string,
+  members: array<radioNode>,
 }
 
 // =============================================================================
 // Parse Result
 // =============================================================================
 
-interface ParseResult {
-  ast: BlockNode | null;
-  errors: ParseError[];
-  warnings: ParseWarning[];
-  success: boolean;
+type parseResult = {
+  ast: option<blockNode>,
+  errors: array<V2Errors.parseError>,
+  warnings: array<V2Errors.parseWarning>,
+  success: bool,
 }
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/** Get node type from AST node */
+let getNodeType: astNode => nodeType
+
+/** Get source location from AST node */
+let getLocation: astNode => sourceLocation
+
+/** Check if node is a block node */
+let isBlockNode: astNode => bool
+
+/** Check if node is an element node */
+let isElementNode: astNode => bool
+
+/** Get children from node (if any) */
+let getChildren: astNode => option<array<astNode>>
 ```
 
 ### Data Model Diagram
 
 ```mermaid
 classDiagram
-    class BaseNode {
-        +NodeType type
-        +SourceLocation location
+    class astNode {
+        <<variant>>
+        SceneNode(sceneNode)
+        ComponentNode(componentNode)
+        ContainerNode(containerNode)
+        TextNode(textNode)
+        ButtonNode(buttonNode)
+        ...
     }
 
-    class SceneNode {
-        +type: "Scene"
-        +slug: string
-        +title?: string
-        +device?: DeviceType
-        +transition?: string
-        +children: ASTNode[]
-        +layout: LayoutInfo
+    class sceneNode {
+        location: sourceLocation
+        slug: string
+        title: option~string~
+        device: option~deviceType~
+        transition: option~string~
+        children: array~astNode~
+        layout: layoutInfo
     }
 
-    class ComponentNode {
-        +type: "Component"
-        +slug: string
-        +props: PropDefinition[]
-        +children: ASTNode[]
-        +layout: LayoutInfo
+    class componentNode {
+        location: sourceLocation
+        slug: string
+        props: array~propDefinition~
+        children: array~astNode~
+        layout: layoutInfo
     }
 
-    class ContainerNode {
-        +type: "Container"
-        +id?: string
-        +name?: string
-        +children: ASTNode[]
-        +layout: LayoutInfo
-        +bounds: Bounds
+    class containerNode {
+        location: sourceLocation
+        id: option~string~
+        name: option~string~
+        children: array~astNode~
+        layout: layoutInfo
+        bounds: bounds
     }
 
-    class TextNode {
-        +type: "Text"
-        +content: string
-        +align: Alignment
+    class textNode {
+        location: sourceLocation
+        content: string
+        align: alignment
     }
 
-    class ButtonNode {
-        +type: "Button"
-        +id: string
-        +text: string
+    class buttonNode {
+        location: sourceLocation
+        id: string
+        text: string
     }
 
-    class LinkNode {
-        +type: "Link"
-        +id: string
-        +text: string
+    class linkNode {
+        location: sourceLocation
+        id: string
+        text: string
     }
 
-    class InputNode {
-        +type: "Input"
-        +placeholder: string
+    class inputNode {
+        location: sourceLocation
+        placeholder: string
     }
 
-    class SelectNode {
-        +type: "Select"
-        +id: string
-        +placeholder: string
+    class selectNode {
+        location: sourceLocation
+        id: string
+        placeholder: string
     }
 
-    class CheckboxNode {
-        +type: "Checkbox"
-        +checked: boolean
-        +label: string
+    class checkboxNode {
+        location: sourceLocation
+        checked: bool
+        label: string
     }
 
-    class RadioNode {
-        +type: "Radio"
-        +selected: boolean
-        +label: string
-        +group?: string
+    class radioNode {
+        location: sourceLocation
+        selected: bool
+        label: string
+        group: option~string~
     }
 
-    class DividerNode {
-        +type: "Divider"
-        +style: DividerStyle
-        +id?: string
-        +label?: string
+    class dividerNode {
+        location: sourceLocation
+        style: dividerStyle
+        id: option~string~
+        label: option~string~
     }
 
-    BaseNode <|-- SceneNode
-    BaseNode <|-- ComponentNode
-    BaseNode <|-- ContainerNode
-    BaseNode <|-- TextNode
-    BaseNode <|-- ButtonNode
-    BaseNode <|-- LinkNode
-    BaseNode <|-- InputNode
-    BaseNode <|-- SelectNode
-    BaseNode <|-- CheckboxNode
-    BaseNode <|-- RadioNode
-    BaseNode <|-- DividerNode
+    astNode --> sceneNode
+    astNode --> componentNode
+    astNode --> containerNode
+    astNode --> textNode
+    astNode --> buttonNode
+    astNode --> linkNode
+    astNode --> inputNode
+    astNode --> selectNode
+    astNode --> checkboxNode
+    astNode --> radioNode
+    astNode --> dividerNode
 
-    SceneNode *-- ContainerNode : children
-    ComponentNode *-- ContainerNode : children
-    ContainerNode *-- ContainerNode : children (nested)
+    sceneNode *-- containerNode : children
+    componentNode *-- containerNode : children
+    containerNode *-- containerNode : children (nested)
 ```
 
 ### Error Types
 
-```typescript
-interface ParseError {
-  code: ErrorCode;
-  message: string;
-  location: SourceLocation;
-  recoverable: boolean;
+```rescript
+// types/V2Errors.res
+
+/** Error severity */
+type severity =
+  | Error
+  | Warning
+
+/** Error codes */
+type errorCode =
+  | InvalidIdFormat
+  | MultipleIdDeclarations
+  | UnclosedInput
+  | UnclosedString
+  | UnclosedContainer
+  | MissingBlockDeclaration
+
+/** Warning codes */
+type warningCode =
+  | PropOutsideComponent
+  | UnknownEmoji(string)      // carries the unknown shortcode
+  | MixedDividerLabelId
+  | MissingCheckboxLabel
+  | MissingRadioLabel
+
+/** Parse error record */
+type parseError = {
+  code: errorCode,
+  message: string,
+  location: V2Types.sourceLocation,
+  recoverable: bool,
 }
 
-interface ParseWarning {
-  code: WarningCode;
-  message: string;
-  location: SourceLocation;
+/** Parse warning record */
+type parseWarning = {
+  code: warningCode,
+  message: string,
+  location: V2Types.sourceLocation,
 }
 
-type ErrorCode =
-  | 'INVALID_ID_FORMAT'
-  | 'MULTIPLE_ID_DECLARATIONS'
-  | 'UNCLOSED_INPUT'
-  | 'UNCLOSED_STRING'
-  | 'UNCLOSED_CONTAINER'
-  | 'MISSING_BLOCK_DECLARATION';
+/** Error message templates */
+let getErrorMessage: errorCode => string
 
-type WarningCode =
-  | 'PROP_OUTSIDE_COMPONENT'
-  | 'UNKNOWN_EMOJI'
-  | 'MIXED_DIVIDER_LABEL_ID'
-  | 'MISSING_CHECKBOX_LABEL'
-  | 'MISSING_RADIO_LABEL';
+/** Warning message templates */
+let getWarningMessage: warningCode => string
 
-// Error message templates
-const ERROR_MESSAGES: Record<ErrorCode, string> = {
-  INVALID_ID_FORMAT: 'Error: Invalid ID format - ID line must contain only #id',
-  MULTIPLE_ID_DECLARATIONS: 'Error: Multiple ID declarations in container',
-  UNCLOSED_INPUT: "Error: Unclosed Input boundary - missing '__]'",
-  UNCLOSED_STRING: "Error: Unclosed string literal - missing '\"'",
-  UNCLOSED_CONTAINER: 'Error: Unclosed container - missing bottom border',
-  MISSING_BLOCK_DECLARATION: 'Error: Missing block declaration - add @scene: or @component:',
-};
+/** Create a parse error */
+let makeError: (
+  ~code: errorCode,
+  ~location: V2Types.sourceLocation,
+  ~recoverable: bool,
+) => parseError
 
-const WARNING_MESSAGES: Record<WarningCode, string> = {
-  PROP_OUTSIDE_COMPONENT: 'Warning: PropPlaceholder outside @component - will render as literal',
-  UNKNOWN_EMOJI: "Warning: Unknown emoji shortcode ':{name}:' - rendering as text",
-  MIXED_DIVIDER_LABEL_ID: 'Warning: Mixed label and ID in divider - treating as text',
-  MISSING_CHECKBOX_LABEL: 'Warning: Checkbox without label',
-  MISSING_RADIO_LABEL: 'Warning: Radio without label',
-};
+/** Create a parse warning */
+let makeWarning: (
+  ~code: warningCode,
+  ~location: V2Types.sourceLocation,
+) => parseWarning
+
+// Implementation
+let getErrorMessage = (code: errorCode): string => {
+  switch code {
+  | InvalidIdFormat => "Error: Invalid ID format - ID line must contain only #id"
+  | MultipleIdDeclarations => "Error: Multiple ID declarations in container"
+  | UnclosedInput => "Error: Unclosed Input boundary - missing '__]'"
+  | UnclosedString => "Error: Unclosed string literal - missing '\"'"
+  | UnclosedContainer => "Error: Unclosed container - missing bottom border"
+  | MissingBlockDeclaration => "Error: Missing block declaration - add @scene: or @component:"
+  }
+}
+
+let getWarningMessage = (code: warningCode): string => {
+  switch code {
+  | PropOutsideComponent => "Warning: PropPlaceholder outside @component - will render as literal"
+  | UnknownEmoji(name) => `Warning: Unknown emoji shortcode ':${name}:' - rendering as text`
+  | MixedDividerLabelId => "Warning: Mixed label and ID in divider - treating as text"
+  | MissingCheckboxLabel => "Warning: Checkbox without label"
+  | MissingRadioLabel => "Warning: Radio without label"
+  }
+}
 ```
 
 ---
@@ -818,32 +1118,32 @@ const WARNING_MESSAGES: Record<WarningCode, string> = {
 
 ```mermaid
 flowchart TD
-    START[Call parse function] --> INIT[Initialize ParseContext]
-    INIT --> TOKENIZE[Call lexer.tokenize]
-    TOKENIZE --> DETECT_BLOCK{blockParser.detectBlockType}
+    START[Call V2Parser.parse] --> INIT[ParseContext.make]
+    INIT --> TOKENIZE[Lexer.tokenize]
+    TOKENIZE --> DETECT_BLOCK{BlockParser.detectBlockType}
 
-    DETECT_BLOCK -->|@scene:| PARSE_SCENE[parseScene]
-    DETECT_BLOCK -->|@component:| PARSE_COMPONENT[parseComponent]
-    DETECT_BLOCK -->|None| ERROR_BLOCK[Error: MISSING_BLOCK_DECLARATION]
+    DETECT_BLOCK -->|@scene:| PARSE_SCENE[BlockParser.parseScene]
+    DETECT_BLOCK -->|@component:| PARSE_COMPONENT[BlockParser.parseComponent]
+    DETECT_BLOCK -->|None| ERROR_BLOCK[V2Errors.MissingBlockDeclaration]
 
-    PARSE_SCENE --> PARSE_PROPS[parseBlockProperties]
+    PARSE_SCENE --> PARSE_PROPS[BlockParser.parseBlockProperties]
     PARSE_COMPONENT --> PARSE_PROPS
 
-    PARSE_PROPS --> PARSE_CONTENT[parseContent]
-    PARSE_CONTENT --> PRIORITY_MATCH{priorityMatcher.match}
+    PARSE_PROPS --> PARSE_CONTENT[BlockParser.parseContent]
+    PARSE_CONTENT --> PRIORITY_MATCH{PriorityMatcher.match_}
 
-    PRIORITY_MATCH -->|Match success| ELEMENT_PARSE[elementParser.parse]
-    PRIORITY_MATCH -->|Match failure| TEXT_FALLBACK[textParser.parse]
+    PRIORITY_MATCH -->|Match success| ELEMENT_PARSE[V2ElementParser.parse]
+    PRIORITY_MATCH -->|Match failure| TEXT_FALLBACK[TextParser.parse]
 
     ELEMENT_PARSE --> COLLECT_NODES[Collect nodes]
     TEXT_FALLBACK --> COLLECT_NODES
 
-    COLLECT_NODES --> HAS_MORE{More content?}
-    HAS_MORE -->|Yes| PRIORITY_MATCH
-    HAS_MORE -->|No| INFER_LAYOUT[layoutInferrer.inferLayout]
+    COLLECT_NODES --> HAS_MORE{TokenStream.isAtEnd?}
+    HAS_MORE -->|No| PRIORITY_MATCH
+    HAS_MORE -->|Yes| INFER_LAYOUT[LayoutInferrer.inferLayout]
 
-    INFER_LAYOUT --> VALIDATE[validator.validate]
-    VALIDATE --> BUILD_RESULT[Create ParseResult]
+    INFER_LAYOUT --> VALIDATE[Validator.validate]
+    VALIDATE --> BUILD_RESULT[Create parseResult]
 
     ERROR_BLOCK --> BUILD_RESULT
     BUILD_RESULT --> RETURN[Return result]
@@ -853,11 +1153,11 @@ flowchart TD
 
 ```mermaid
 flowchart TD
-    START[Start Container parsing] --> DETECT_TOP{Detect top border<br/>+--name--+ or +--#id--+}
+    START[Start Container parsing] --> DETECT_TOP{ContainerParser.parseTopBorder<br/>+--name--+ or +--#id--+}
 
-    DETECT_TOP -->|Format 1 ID| EXTRACT_ID1[containerParser.extractIdFromBorder]
+    DETECT_TOP -->|Format 1 ID| EXTRACT_ID1[Extract ID from border]
     DETECT_TOP -->|Name only| EXTRACT_NAME[Extract name]
-    DETECT_TOP -->|Empty top| NO_NAME[name = null]
+    DETECT_TOP -->|Empty top| NO_NAME[name = None]
 
     EXTRACT_ID1 --> PARSE_LINES[Start line-by-line parsing]
     EXTRACT_NAME --> PARSE_LINES
@@ -865,19 +1165,19 @@ flowchart TD
 
     PARSE_LINES --> CHECK_LINE{Check current line}
 
-    CHECK_LINE -->|"\| #id \|" pattern| CHECK_ID2{Check Format 2 ID}
-    CHECK_LINE -->|"\| content \|"| PARSE_CONTENT[Parse nested content]
-    CHECK_LINE -->|"+--------+"| BOTTOM_BORDER[Complete bottom border]
+    CHECK_LINE -->|"\\| #id \\|" pattern| CHECK_ID2{Check Format 2 ID}
+    CHECK_LINE -->|"\\| content \\|"| PARSE_CONTENT[Parse nested content]
+    CHECK_LINE -->|"+--------+"| BOTTOM_BORDER[parseBottomBorder]
 
     CHECK_ID2 -->|Sole #id| SET_ID2[Set Format 2 ID]
-    CHECK_ID2 -->|ID already exists| ERROR_MULTI[Error: MULTIPLE_ID_DECLARATIONS]
-    CHECK_ID2 -->|Contains content besides #id| ERROR_FORMAT[Error: INVALID_ID_FORMAT]
+    CHECK_ID2 -->|ID already exists| ERROR_MULTI[MultipleIdDeclarations]
+    CHECK_ID2 -->|Contains content besides #id| ERROR_FORMAT[InvalidIdFormat]
 
     SET_ID2 --> NEXT_LINE[Next line]
     PARSE_CONTENT --> RECURSE{Nested Container?}
 
-    RECURSE -->|Yes| RECURSIVE_PARSE[Recursive containerParser.parse]
-    RECURSE -->|No| ELEMENT_PARSE[priorityMatcher.match]
+    RECURSE -->|Yes| RECURSIVE_PARSE[Recursive ContainerParser.parse]
+    RECURSE -->|No| ELEMENT_PARSE[PriorityMatcher.match_]
 
     RECURSIVE_PARSE --> COLLECT[Add to children]
     ELEMENT_PARSE --> COLLECT
@@ -885,20 +1185,20 @@ flowchart TD
     COLLECT --> NEXT_LINE
     NEXT_LINE --> CHECK_LINE
 
-    BOTTOM_BORDER --> RESOLVE_ID{Determine ID priority}
+    BOTTOM_BORDER --> RESOLVE_ID{extractContainerId}
     ERROR_MULTI --> ERROR_NODE[Create ErrorNode]
     ERROR_FORMAT --> ERROR_NODE
 
     RESOLVE_ID -->|Format 1 exists| USE_ID1[Use Format 1 ID<br/>Treat Format 2 as text]
     RESOLVE_ID -->|Only Format 2| USE_ID2[Use Format 2 ID]
-    RESOLVE_ID -->|No ID| NO_ID[id = undefined]
+    RESOLVE_ID -->|No ID| NO_ID[id = None]
 
     USE_ID1 --> BUILD_NODE[Create ContainerNode]
     USE_ID2 --> BUILD_NODE
     NO_ID --> BUILD_NODE
     ERROR_NODE --> BUILD_NODE
 
-    BUILD_NODE --> RETURN[Return Container]
+    BUILD_NODE --> RETURN[Return ContainerNode]
 ```
 
 ### Process 3: Bracket Element Disambiguation
@@ -907,17 +1207,17 @@ flowchart TD
 flowchart TD
     START["[ ] pattern found"] --> CHECK_SELECT{"Starts with [v: ?"}
 
-    CHECK_SELECT -->|Yes| PARSE_SELECT[selectParser.parse<br/>Priority 95]
+    CHECK_SELECT -->|Yes| PARSE_SELECT[SelectParser.parse<br/>Priority 95]
     CHECK_SELECT -->|No| CHECK_INPUT{"Starts with [__ & ends with __]?"}
 
-    CHECK_INPUT -->|Yes| PARSE_INPUT[inputParser.parse<br/>Priority 90]
+    CHECK_INPUT -->|Yes| PARSE_INPUT[InputParser.parse<br/>Priority 90]
     CHECK_INPUT -->|No| CHECK_CHECKBOX{Exactly 3 chars with brackets?<br/>[x]/[X]/[v]/[V]/[ ]}
 
     CHECK_CHECKBOX -->|Yes| CHECK_LABEL{Label follows?}
-    CHECK_LABEL -->|Yes| PARSE_CHECKBOX[checkboxParser.parse<br/>Priority 80]
-    CHECK_LABEL -->|No| WARN_LABEL[Generate warning<br/>Parse as Checkbox]
+    CHECK_LABEL -->|Yes| PARSE_CHECKBOX[CheckboxParser.parse<br/>Priority 80]
+    CHECK_LABEL -->|No| WARN_LABEL[MissingCheckboxLabel warning<br/>Parse as Checkbox]
 
-    CHECK_CHECKBOX -->|No| PARSE_BUTTON[buttonParser.parse<br/>Priority 70]
+    CHECK_CHECKBOX -->|No| PARSE_BUTTON[ButtonParser.parse<br/>Priority 70]
 
     PARSE_SELECT --> RETURN[Return result]
     PARSE_INPUT --> RETURN
@@ -935,18 +1235,18 @@ flowchart TD
     CHECK_QUOTE -->|Yes| PARSE_STRING[Parse String<br/>Priority 115]
     CHECK_QUOTE -->|No| NOT_STRING[Not a String]
 
-    PARSE_STRING --> SCAN_CONTENT[Scan content]
+    PARSE_STRING --> SCAN_CONTENT[Scanner.scanContent]
 
     SCAN_CONTENT --> CHECK_CHAR{Current character}
 
     CHECK_CHAR -->|"\\\"" escape| ESCAPE_QUOTE[Add quote character]
     CHECK_CHAR -->|"\\\\" escape| ESCAPE_BACKSLASH[Add backslash]
     CHECK_CHAR -->|"\\$" escape| ESCAPE_DOLLAR[Add dollar sign]
-    CHECK_CHAR -->|"${" start| PARSE_PROP[propPlaceholderParser.parse]
+    CHECK_CHAR -->|"${" start| PARSE_PROP[PropPlaceholderParser.parse]
     CHECK_CHAR -->|Closing quote| END_STRING[End string]
     CHECK_CHAR -->|Newline character| ADD_NEWLINE[Add newline, multiline=true]
     CHECK_CHAR -->|Regular character| ADD_CHAR[Add character]
-    CHECK_CHAR -->|EOF| ERROR_UNCLOSED[Error: UNCLOSED_STRING]
+    CHECK_CHAR -->|EOF| ERROR_UNCLOSED[UnclosedString error]
 
     ESCAPE_QUOTE --> NEXT_CHAR[Next character]
     ESCAPE_BACKSLASH --> NEXT_CHAR
@@ -987,22 +1287,22 @@ flowchart TD
 
     COMBINE_GROUPS --> DETERMINE_DIR{Determine overall direction}
 
-    DETERMINE_DIR -->|All same line| DIR_ROW[direction: 'row']
-    DETERMINE_DIR -->|All different lines| DIR_COLUMN[direction: 'column']
-    DETERMINE_DIR -->|Mixed| DIR_MIXED[direction: 'mixed']
+    DETERMINE_DIR -->|All same line| DIR_ROW[direction: Row]
+    DETERMINE_DIR -->|All different lines| DIR_COLUMN[direction: Column]
+    DETERMINE_DIR -->|Mixed| DIR_MIXED[direction: Mixed]
 
     DIR_ROW --> CHECK_RADIO[Check Radio grouping]
     DIR_COLUMN --> CHECK_RADIO
     DIR_MIXED --> CHECK_RADIO
 
     CHECK_RADIO --> FIND_RADIOS{Find Radio buttons}
-    FIND_RADIOS -->|Found| GROUP_RADIOS[layoutInferrer.groupRadioButtons]
-    FIND_RADIOS -->|None| BUILD_LAYOUT[Create LayoutInfo]
+    FIND_RADIOS -->|Found| GROUP_RADIOS[RadioGrouper.groupByProximity]
+    FIND_RADIOS -->|None| BUILD_LAYOUT[Create layoutInfo]
 
-    GROUP_RADIOS --> ASSIGN_GROUPS[Assign group IDs]
+    GROUP_RADIOS --> ASSIGN_GROUPS[RadioGrouper.assignGroupIds]
     ASSIGN_GROUPS --> BUILD_LAYOUT
 
-    BUILD_LAYOUT --> RETURN[Return LayoutInfo]
+    BUILD_LAYOUT --> RETURN[Return layoutInfo]
 ```
 
 ### Process 6: Error Recovery
@@ -1014,17 +1314,17 @@ flowchart TD
     CLASSIFY -->|Recoverable| RECOVERABLE[Attempt recovery]
     CLASSIFY -->|Unrecoverable| UNRECOVERABLE[Halt parsing]
 
-    RECOVERABLE --> ERROR_TYPE{Error type}
+    RECOVERABLE --> ERROR_TYPE{errorCode type}
 
-    ERROR_TYPE -->|UNCLOSED_CONTAINER| RECOVER_CONTAINER[Parse until current line<br/>Add ErrorNode]
-    ERROR_TYPE -->|UNCLOSED_STRING| RECOVER_STRING[String until end of line<br/>Add ErrorNode]
-    ERROR_TYPE -->|UNCLOSED_INPUT| RECOVER_INPUT[Find ] to close<br/>Add ErrorNode]
-    ERROR_TYPE -->|INVALID_ID_FORMAT| RECOVER_ID[Treat as text<br/>Add warning]
+    ERROR_TYPE -->|UnclosedContainer| RECOVER_CONTAINER[Parse until current line<br/>Add ErrorNode]
+    ERROR_TYPE -->|UnclosedString| RECOVER_STRING[String until end of line<br/>Add ErrorNode]
+    ERROR_TYPE -->|UnclosedInput| RECOVER_INPUT[Find ] to close<br/>Add ErrorNode]
+    ERROR_TYPE -->|InvalidIdFormat| RECOVER_ID[Treat as text<br/>Add warning]
 
-    RECOVER_CONTAINER --> COLLECT_ERROR[Collect error]
+    RECOVER_CONTAINER --> COLLECT_ERROR[ParseContext.addError]
     RECOVER_STRING --> COLLECT_ERROR
     RECOVER_INPUT --> COLLECT_ERROR
-    RECOVER_ID --> COLLECT_WARNING[Collect warning]
+    RECOVER_ID --> COLLECT_WARNING[ParseContext.addWarning]
 
     COLLECT_ERROR --> CONTINUE[Continue parsing next element]
     COLLECT_WARNING --> CONTINUE
@@ -1064,16 +1364,16 @@ flowchart TD
 
 ### Error Reporting Format
 
-```typescript
+```rescript
 // Error output example
-{
-  code: 'UNCLOSED_CONTAINER',
-  message: 'Error: Unclosed container - missing bottom border',
+let errorExample: V2Errors.parseError = {
+  code: UnclosedContainer,
+  message: "Error: Unclosed container - missing bottom border",
   location: {
     start: { line: 5, column: 1, offset: 45 },
-    end: { line: 5, column: 12, offset: 56 }
+    end_: { line: 5, column: 12, offset: 56 },
   },
-  recoverable: true
+  recoverable: true,
 }
 ```
 
@@ -1114,44 +1414,64 @@ flowchart TD
 
 ### Example Test Cases
 
-```typescript
-// Container parsing test
-describe('ContainerParser', () => {
-  it('should parse container with name', () => {
-    const input = `+--Login--+
+```rescript
+// __tests__/elements/ContainerParser_test.res
+
+open Test
+
+describe("ContainerParser", () => {
+  test("should parse container with name", () => {
+    let input = `+--Login--+
 |         |
-+---------+`;
-    const result = parse(input);
-    expect(result.ast.children[0]).toMatchObject({
-      type: 'Container',
-      name: 'Login',
-    });
-  });
++---------+`
+    let result = V2Parser.parse(input)
 
-  it('should parse container with format 1 ID', () => {
-    const input = `+--#card1--+
+    switch result.ast {
+    | Some(SceneBlock(scene)) => {
+        switch scene.children->Array.get(0) {
+        | Some(ContainerNode(container)) => {
+            expect(container.name)->toEqual(Some("Login"))
+          }
+        | _ => fail("Expected ContainerNode")
+        }
+      }
+    | _ => fail("Expected SceneBlock")
+    }
+  })
+
+  test("should parse container with format 1 ID", () => {
+    let input = `+--#card1--+
 |           |
-+-----------+`;
-    const result = parse(input);
-    expect(result.ast.children[0]).toMatchObject({
-      type: 'Container',
-      id: 'card1',
-    });
-  });
++-----------+`
+    let result = V2Parser.parse(input)
 
-  it('should report error for multiple IDs', () => {
-    const input = `+----------+
+    switch result.ast {
+    | Some(SceneBlock(scene)) => {
+        switch scene.children->Array.get(0) {
+        | Some(ContainerNode(container)) => {
+            expect(container.id)->toEqual(Some("card1"))
+          }
+        | _ => fail("Expected ContainerNode")
+        }
+      }
+    | _ => fail("Expected SceneBlock")
+    }
+  })
+
+  test("should report error for multiple IDs", () => {
+    let input = `+----------+
 | #id1     |
 | #id2     |
-+----------+`;
-    const result = parse(input);
-    expect(result.errors).toContainEqual(
-      expect.objectContaining({
-        code: 'MULTIPLE_ID_DECLARATIONS',
-      })
-    );
-  });
-});
++----------+`
+    let result = V2Parser.parse(input)
+
+    let hasMultipleIdError = result.errors->Array.some(err => {
+      err.code == MultipleIdDeclarations
+    })
+
+    expect(hasMultipleIdError)->toEqual(true)
+  })
+})
 ```
 
 ---
@@ -1184,41 +1504,88 @@ describe('ContainerParser', () => {
 
 ### Adding New Element Types
 
-1. Implement `ElementParser` interface
-2. Register with `ElementParserRegistry`
-3. Add new node type to AST types
+1. Create new parser module implementing `V2ElementParser.t`
+2. Register with `V2ParserRegistry`
+3. Add new node variant to `V2Types.astNode`
 4. Assign priority value
 
-```typescript
+```rescript
 // Example: Adding a new element type
-class CustomElementParser implements ElementParser {
-  readonly type = 'CustomElement' as const;
-  readonly priority = 75; // Between Button (70) and Checkbox (80)
+// elements/CustomElementParser.res
 
-  canParse(lexer: Lexer): boolean {
-    return lexer.peek().value.startsWith('{{');
-  }
+open V2Types
 
-  parse(context: ParseContext, lexer: Lexer): CustomElementNode {
-    // Implementation
-  }
+let priority = 75  // Between Button (70) and Checkbox (80)
+
+let canParse = (stream: TokenStream.t): bool => {
+  let token = TokenStream.peek(stream)
+  token.value->String.startsWith("{{")
 }
 
-// Registration
-registry.register(new CustomElementParser());
+let parse = (context: ParseContext.t, stream: TokenStream.t): option<V2Types.astNode> => {
+  // Implementation
+  None  // placeholder
+}
+
+let make = (): V2ElementParser.t => {
+  V2ElementParser.make(
+    ~elementType=Custom,
+    ~priority,
+    ~canParse,
+    ~parse,
+  )
+}
+
+// Registration in V2ParserRegistry.res
+let registry = V2ParserRegistry.make()
+registry->V2ParserRegistry.register(CustomElementParser.make())
 ```
 
 ### Custom Emoji Registry
 
-```typescript
-// Extending emoji shortcodes
-const emojiRegistry = new EmojiRegistry();
-emojiRegistry.register(':custom:', '🎉');
-emojiRegistry.register(':company-logo:', '🏢');
+```rescript
+// registry/EmojiRegistry.res
 
-const parser = new Parser({
-  emojiRegistry,
-});
+type t = {
+  mutable mappings: Js.Dict.t<string>,
+}
+
+let make = (): t => {
+  { mappings: Js.Dict.empty() }
+}
+
+let register = (registry: t, shortcode: string, emoji: string): unit => {
+  registry.mappings->Js.Dict.set(shortcode, emoji)
+}
+
+let lookup = (registry: t, shortcode: string): option<string> => {
+  registry.mappings->Js.Dict.get(shortcode)
+}
+
+// Default registry with standard emoji
+let makeDefault = (): t => {
+  let registry = make()
+  registry->register("check", "\u2714")
+  registry->register("cross", "\u2718")
+  registry->register("warning", "\u26A0")
+  registry->register("info", "\u2139")
+  registry->register("heart", "\u2764")
+  registry->register("star", "\u2B50")
+  registry->register("search", "\u{1F50D}")
+  registry->register("settings", "\u2699")
+  registry->register("user", "\u{1F464}")
+  registry->register("home", "\u{1F3E0}")
+  registry->register("mail", "\u2709")
+  registry->register("bell", "\u{1F514}")
+  registry->register("lock", "\u{1F512}")
+  registry->register("bow", "\u{1F647}")
+  registry
+}
+
+// Usage
+let customRegistry = EmojiRegistry.make()
+customRegistry->EmojiRegistry.register("custom", "\u{1F389}")
+customRegistry->EmojiRegistry.register("company-logo", "\u{1F3E2}")
 ```
 
 ---
@@ -1227,52 +1594,54 @@ const parser = new Parser({
 
 ### Public API
 
-```typescript
-// Main entry point
-export function parse(source: string, options?: ParseOptions): ParseResult;
+```rescript
+// V2Parser.res - Main entry point
 
-// Options interface
-export interface ParseOptions {
+/** Parse options */
+type parseOptions = {
   /** Enable strict mode (no error recovery) */
-  strict?: boolean;
-
+  strict: bool,
   /** Custom emoji registry */
-  emojiRegistry?: EmojiRegistry;
-
+  emojiRegistry: option<EmojiRegistry.t>,
   /** Tab size for column calculation */
-  tabSize?: number;
-
+  tabSize: int,
   /** Maximum nesting depth */
-  maxDepth?: number;
+  maxDepth: int,
 }
 
-// Result interface
-export interface ParseResult {
-  /** Parsed AST (null if fatal error) */
-  ast: BlockNode | null;
-
-  /** Parse errors */
-  errors: ParseError[];
-
-  /** Parse warnings */
-  warnings: ParseWarning[];
-
-  /** Overall success status */
-  success: boolean;
+/** Default parse options */
+let defaultOptions: parseOptions = {
+  strict: false,
+  emojiRegistry: None,
+  tabSize: 4,
+  maxDepth: 10,
 }
 
-// Utility exports
-export { Position, SourceLocation } from './types/ast';
-export { ParseError, ParseWarning, ErrorCode, WarningCode } from './types/errors';
-export * from './types/ast'; // All AST node types
+/** Main parsing function */
+@genType
+let parse: (string, ~options: parseOptions=?) => V2Types.parseResult
+
+/** Parse only wireframe (no interactions) */
+@genType
+let parseWireframe: string => V2Types.parseResult
+
+/** Parser version */
+@genType
+let version: string
+
+/** Parser implementation identifier */
+@genType
+let implementation: string
 ```
 
 ### Usage Example
 
-```typescript
-import { parse, ParseResult } from '@wyreframe/parser';
+```rescript
+// Example usage
+open V2Parser
+open V2Types
 
-const source = `
+let source = `
 @scene: login
 @title: Login Page
 
@@ -1281,18 +1650,29 @@ const source = `
 | [__password__] |
 | [ Sign In ] |
 +---------+
-`;
+`
 
-const result: ParseResult = parse(source);
+let result = parse(source)
 
-if (result.success) {
-  console.log('AST:', JSON.stringify(result.ast, null, 2));
-} else {
-  console.error('Errors:', result.errors);
+switch result.success {
+| true => {
+    switch result.ast {
+    | Some(block) => Console.log2("AST:", block)
+    | None => ()
+    }
+  }
+| false => {
+    Console.log("Errors:")
+    result.errors->Array.forEach(err => {
+      Console.log(err.message)
+    })
+  }
 }
 
 // Handle warnings
-result.warnings.forEach(w => console.warn(w.message));
+result.warnings->Array.forEach(w => {
+  Console.warn(w.message)
+})
 ```
 
 ---
@@ -1301,34 +1681,34 @@ result.warnings.forEach(w => console.warn(w.message));
 
 | Requirement | Design Component | Test Category |
 |-------------|------------------|---------------|
-| REQ-1 Block Type | BlockParser, SceneNode, ComponentNode | Unit, Integration |
-| REQ-2 Container | ContainerParser, ContainerNode | Unit, Integration |
+| REQ-1 Block Type | BlockParser.res, sceneNode, componentNode | Unit, Integration |
+| REQ-2 Container | ContainerParser.res, containerNode | Unit, Integration |
 | REQ-3 Container ID | ContainerParser.extractContainerId | Unit |
-| REQ-4 Text | TextParser, TextNode | Unit |
-| REQ-5 Button | ButtonParser, ButtonNode | Unit |
-| REQ-6 Link | LinkParser, LinkNode | Unit |
-| REQ-7 Input | InputParser, InputNode | Unit |
-| REQ-8 Select | SelectParser, SelectNode | Unit |
-| REQ-9 Checkbox | CheckboxParser, CheckboxNode | Unit |
-| REQ-10 Radio | RadioParser, RadioNode, RadioGroup | Unit, Integration |
-| REQ-11 Divider | DividerParser, DividerNode | Unit |
-| REQ-12 String Literal | StringParser, StringNode (multiline supported) | Unit |
-| REQ-13 Emoji | EmojiParser, EmojiNode, EmojiRegistry | Unit |
-| REQ-14 PropPlaceholder | PropPlaceholderParser, PropPlaceholderNode | Unit |
-| REQ-15 Implicit Layout | LayoutInferrer, LayoutInfo | Integration |
-| REQ-16 Priority System | PriorityMatcher, PRIORITY constants | Integration |
-| REQ-17 Error Handling | Validator, ParseError, ParseWarning | Error Recovery |
-| REQ-18 AST Output | All AST types, ParseResult | Integration |
+| REQ-4 Text | TextParser.res, textNode | Unit |
+| REQ-5 Button | ButtonParser.res, buttonNode | Unit |
+| REQ-6 Link | LinkParser.res, linkNode | Unit |
+| REQ-7 Input | InputParser.res, inputNode | Unit |
+| REQ-8 Select | SelectParser.res, selectNode | Unit |
+| REQ-9 Checkbox | CheckboxParser.res, checkboxNode | Unit |
+| REQ-10 Radio | RadioParser.res, radioNode, RadioGrouper.res | Unit, Integration |
+| REQ-11 Divider | DividerParser.res, dividerNode | Unit |
+| REQ-12 String Literal | StringParser.res, stringNode (multiline supported) | Unit |
+| REQ-13 Emoji | EmojiParser.res, emojiNode, EmojiRegistry.res | Unit |
+| REQ-14 PropPlaceholder | PropPlaceholderParser.res, propPlaceholderNode | Unit |
+| REQ-15 Implicit Layout | LayoutInferrer.res, layoutInfo | Integration |
+| REQ-16 Priority System | PriorityMatcher.res, Priority module | Integration |
+| REQ-17 Error Handling | Validator.res, V2Errors.res | Error Recovery |
+| REQ-18 AST Output | V2Types.res, parseResult | Integration |
 | REQ-19 Performance | Lazy tokenization, caching | Performance |
-| REQ-20 Extensibility | ElementParserRegistry, EmojiRegistry | Unit |
-| REQ-21 Error Recovery | Validator, synchronization points | Error Recovery |
-| REQ-22 Unicode | Position.column, unicode utils | Unit |
+| REQ-20 Extensibility | V2ParserRegistry.res, EmojiRegistry.res | Unit |
+| REQ-21 Error Recovery | Validator.res, synchronization points | Error Recovery |
+| REQ-22 Unicode | PositionUtils.res, UnicodeUtils.res | Unit |
 
 ---
 
 ## Summary
 
-This design document defines the complete architecture and detailed design for the Wyreframe Syntax v2.3 Parser.
+This design document defines the complete architecture and detailed design for the Wyreframe Syntax v2.3 Parser implemented in ReScript.
 
 **Key Design Decisions:**
 
@@ -1337,6 +1717,16 @@ This design document defines the complete architecture and detailed design for t
 3. **Error Recovery**: Support partial parsing through synchronization points
 4. **Extensibility**: Easy addition of new element types through Element Parser registry
 5. **Performance**: Optimization through lazy tokenization and caching
+6. **ReScript Patterns**: Using variant types, record types, and module-based organization
+
+**ReScript-Specific Patterns:**
+
+- Variant types for AST nodes (e.g., `astNode`, `nodeType`, `errorCode`)
+- Record types for parser interfaces (e.g., `V2ElementParser.t`)
+- Module-based organization with clear signatures
+- Result type for error handling (`result<'a, 'e>`)
+- Option type for nullable values (`option<'a>`)
+- GenType annotations for TypeScript interop (`@genType`)
 
 **Next Steps:**
 - Create Implementation Plan
@@ -1345,6 +1735,6 @@ This design document defines the complete architecture and detailed design for t
 
 ---
 
-**Version**: 1.0.0
+**Version**: 1.1.0
 **Last Updated**: 2025-12-27
 **Status**: Draft
