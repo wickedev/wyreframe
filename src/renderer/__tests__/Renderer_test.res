@@ -485,4 +485,21 @@ describe("Renderer", () => {
       })
     })
   })
+
+  describe("Issue #25: Social login buttons should use space-evenly distribution", () => {
+    test("defaultStyles uses space-evenly for distributed rows", t => {
+      // The .wf-row.wf-distribute class should use space-evenly for equal spacing
+      // between buttons and at both ends, not space-between which pushes to edges
+      let hasSpaceEvenly = Renderer.defaultStyles->String.includes("space-evenly")
+      t->expect(hasSpaceEvenly)->Expect.toBe(true)
+    })
+
+    test("defaultStyles does not use space-between for distributed rows", t => {
+      // space-between creates uneven visual spacing with buttons at edges
+      // space-evenly creates equal spacing everywhere for better aesthetics
+      let distributeRule = ".wf-row.wf-distribute { justify-content:space-between"
+      let hasSpaceBetween = Renderer.defaultStyles->String.includes(distributeRule)
+      t->expect(hasSpaceBetween)->Expect.toBe(false)
+    })
+  })
 })

@@ -160,13 +160,13 @@ let defaultStyles = `
   .wf-section-header { background:#fff; padding:4px 8px; font-size:12px; color:#666; border-bottom:1px solid #333; }
   .wf-section-content { padding:8px; }
   .wf-checkbox { display:flex; align-items:center; gap:8px; margin:4px 0; cursor:pointer; }
-  .align-center { text-align:center; }
-  .align-right { text-align:right; }
-  .wf-row.align-center { justify-content:center; }
-  .wf-row.align-right { justify-content:flex-end; }
-  .wf-row.distribute { justify-content:space-between; }
-  .wf-button.align-center, .wf-link.align-center { margin-left:auto; margin-right:auto; }
-  .wf-button.align-right, .wf-link.align-right { margin-left:auto; margin-right:0; }
+  .wf-align-center { text-align:center; }
+  .wf-align-right { text-align:right; }
+  .wf-row.wf-align-center { justify-content:center; }
+  .wf-row.wf-align-right { justify-content:flex-end; }
+  .wf-row.wf-distribute { justify-content:space-evenly; }
+  .wf-button.wf-align-center, .wf-link.wf-align-center { margin-left:auto; margin-right:auto; }
+  .wf-button.wf-align-right, .wf-link.wf-align-right { margin-left:auto; margin-right:0; }
 `
 
 // ============================================================================
@@ -200,8 +200,8 @@ let getInputsFromBox = (elem: element): array<element> => {
 let alignmentToClass = (align: alignment): option<string> => {
   switch align {
   | Left => None
-  | Center => Some("align-center")
-  | Right => Some("align-right")
+  | Center => Some("wf-align-center")
+  | Right => Some("wf-align-right")
   }
 }
 
@@ -500,9 +500,9 @@ let rec renderElement = (
       let row = DomBindings.document->DomBindings.createElement("div")
       row->DomBindings.setClassName("wf-row")
 
-      // Issue #23: Use space-between distribution for rows with distributed alignments
+      // Issue #23: Use space-evenly distribution for rows with distributed alignments
       if hasDistributedChildren(children) {
-        row->DomBindings.classList->DomBindings.add("distribute")
+        row->DomBindings.classList->DomBindings.add("wf-distribute")
       } else {
         applyAlignment(row, align)
       }
