@@ -154,6 +154,7 @@ let defaultStyles = `
   .wf-row .wf-link { display:inline; margin:0 8px; }
   .wf-text { margin:4px 0; line-height:1.4; }
   .wf-text.emphasis { font-weight:bold; }
+  .wf-spacer { min-height:1em; }
   .wf-divider { border:none; border-top:1px solid #333; margin:12px 0; }
   .wf-section { border:1px solid #333; margin:8px 0; }
   .wf-section-header { background:#fff; padding:4px 8px; font-size:12px; color:#666; border-bottom:1px solid #333; }
