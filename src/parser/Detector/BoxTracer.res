@@ -114,6 +114,7 @@ let rowHasVLineInRange = (grid: Grid.t, row: int, leftCol: int, rightCol: int): 
  * - Continues through rows with misaligned VLines (records for warnings)
  * - Stops at rows with no VLine at all in the box's column range (box boundary)
  * - Handles internal dividers (+=====+) correctly by finding the last corner
+ * - IMPORTANT: Stops when detecting vertically adjacent boxes (Issue #18)
  *
  * @param grid - The 2D character grid
  * @param topLeft - Position of top-left corner (for determining left boundary)
@@ -132,7 +133,40 @@ let findBottomRightCorner = (grid: Grid.t, topLeft: Position.t, topRight: Positi
     | Some(Corner) => {
         // Found a corner at the expected column - remember it
         lastCorner := Some(pos)
-        row := row.contents + 1
+
+        // Issue #18 fix: Check if the NEXT row also has a Corner at the same column.
+        // If so, we've found the bottom of THIS box and the top of ANOTHER box.
+        // We should stop scanning here to avoid merging adjacent boxes.
+        let nextRow = row.contents + 1
+        if nextRow < grid.height {
+          let nextPos = Position.make(nextRow, topRight.col)
+          switch Grid.get(grid, nextPos) {
+          | Some(Corner) => {
+              // Next row also has a corner - this indicates adjacent boxes
+              // Also check if the next row starts a new box by checking left column
+              let nextLeftPos = Position.make(nextRow, topLeft.col)
+              switch Grid.get(grid, nextLeftPos) {
+              | Some(Corner) => {
+                  // Both corners present in next row = new box starting
+                  // Stop scanning - current corner is our bottom-right
+                  continue := false
+                }
+              | _ => {
+                  // Only right corner in next row - might be internal structure
+                  // Continue scanning
+                  row := row.contents + 1
+                }
+              }
+            }
+          | _ => {
+              // Next row doesn't have a corner - continue normally
+              row := row.contents + 1
+            }
+          }
+        } else {
+          // No more rows - we're done
+          row := row.contents + 1
+        }
       }
     | Some(VLine) => {
         // Found a VLine at the expected column - continue scanning
@@ -198,6 +232,41 @@ let traceBox = (grid: Grid.t, topLeft: Position.t): traceResult => {
           ),
         )
       | Some(topRight) => {
+          // Issue #18 fix: Validate this is a TRUE top edge, not a bottom edge
+          // of another box. A valid top edge should have VLine characters (|)
+          // in the next row at the left and right columns, NOT Corner characters (+).
+          // If the next row has corners at both positions, this is likely the
+          // bottom edge of one box immediately followed by the top edge of another.
+          let nextRow = topLeft.row + 1
+          let isValidTopEdge = if nextRow < grid.height {
+            let nextLeftPos = Position.make(nextRow, topLeft.col)
+            let nextRightPos = Position.make(nextRow, topRight.col)
+            let leftChar = Grid.get(grid, nextLeftPos)
+            let rightChar = Grid.get(grid, nextRightPos)
+            // Valid top edge: next row has VLine on both sides (content row)
+            // Invalid: next row has Corner on both sides (another box edge)
+            switch (leftChar, rightChar) {
+            | (Some(Corner), Some(Corner)) => false  // This is a bottom edge, not a top
+            | (Some(VLine), Some(VLine)) => true     // This is a valid top edge
+            | (Some(VLine), Some(Corner)) => true    // Could be valid with internal structure
+            | (Some(Corner), Some(VLine)) => true    // Could be valid with internal structure
+            | _ => true  // Be permissive for other cases
+            }
+          } else {
+            false  // No next row means this can't be a valid box top
+          }
+
+          if !isValidTopEdge {
+            // This corner is likely a bottom edge of another box, not a valid top-left
+            Error(
+              ErrorTypes.makeSimple(
+                ErrorTypes.InvalidElement({
+                  content: "Not a valid box top-left corner (adjacent box detected)",
+                  position: topLeft,
+                }),
+              ),
+            )
+          } else {
           // Step 3: Extract box name from top edge
           let topEdgeChars = Array.map(topEdgeScan, ((_, cell)) => cell)
 
@@ -427,6 +496,7 @@ let traceBox = (grid: Grid.t, topLeft: Position.t): traceResult => {
           }
         }
       } // Close else block for isDividerOnlyEdge
+      } // Close else block for isValidTopEdge
       }
     }
   | _ =>

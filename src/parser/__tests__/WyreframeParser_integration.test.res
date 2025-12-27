@@ -1084,6 +1084,174 @@ describe("E2E-13: Line number offset in warnings with scene directives (Issue #5
   })
 })
 
+// =============================================================================
+// E2E-14: Parse Vertically Adjacent Boxes (Issue #18)
+// Regression test for GitHub issue #18: Login scene elements not parsed
+// when input boxes are vertically stacked without empty lines between them.
+// =============================================================================
+
+describe("E2E-14: Parse Vertically Adjacent Boxes (Issue #18)", _t => {
+  test("parses vertically stacked input boxes without spacing", t => {
+    // This wireframe reproduces the exact issue from #18:
+    // Two input boxes (email and password) are vertically adjacent
+    // with NO empty lines between them. The parser must correctly
+    // detect both as separate boxes and parse their content.
+    let loginWireframe = `
+@scene: login
+
++---------------------------------------+
+|                                       |
+|            'Welcome Back'             |
+|                                       |
+|  +----------------------------------+ |
+|  | #email                           | |
+|  +----------------------------------+ |
+|  +----------------------------------+ |
+|  | #password                        | |
+|  +----------------------------------+ |
+|                                       |
+|                                       |
+|  "Forgot your password?"              |
+|                                       |
+|       [ Sign In ]                     |
+|                                       |
++---------------------------------------+
+`
+
+    let result = Parser.parse(loginWireframe)
+
+    switch result {
+    | Ok((ast, _warnings)) => {
+        // Verify scene exists
+        t->expect(Belt.Array.length(ast.scenes))->Expect.toBe(1)
+
+        let scene = ast.scenes->Array.getUnsafe(0)
+        t->expect(scene.id)->Expect.toBe("login")
+
+        // CRITICAL: Elements array must NOT be empty
+        // This was the main symptom of issue #18
+        t->expect(Belt.Array.length(scene.elements))->Expect.Int.toBeGreaterThan(0)
+
+        // Verify email input is parsed (search recursively)
+        let emailInput = findElement(scene.elements, el => {
+          switch el {
+          | Input({id: "email"}) => true
+          | _ => false
+          }
+        })
+        t->expect(emailInput)->Expect.not->Expect.toBe(None)
+
+        // Verify password input is parsed (search recursively)
+        let passwordInput = findElement(scene.elements, el => {
+          switch el {
+          | Input({id: "password"}) => true
+          | _ => false
+          }
+        })
+        t->expect(passwordInput)->Expect.not->Expect.toBe(None)
+
+        // Verify emphasis text 'Welcome Back' is parsed
+        let welcomeText = findElement(scene.elements, el => {
+          switch el {
+          | Text({content, emphasis: true}) => String.includes(content, "Welcome Back")
+          | _ => false
+          }
+        })
+        t->expect(welcomeText)->Expect.not->Expect.toBe(None)
+
+        // Verify link "Forgot your password?" is parsed
+        let forgotLink = findElement(scene.elements, el => {
+          switch el {
+          | Link({text}) => String.includes(text, "Forgot your password")
+          | _ => false
+          }
+        })
+        t->expect(forgotLink)->Expect.not->Expect.toBe(None)
+
+        // Verify Sign In button is parsed
+        let signInButton = findElement(scene.elements, el => {
+          switch el {
+          | Button({text}) => String.includes(text, "Sign In")
+          | _ => false
+          }
+        })
+        t->expect(signInButton)->Expect.not->Expect.toBe(None)
+      }
+    | Error(errors) => {
+        Console.error2("Parse errors:", errors)
+        t->expect(true)->Expect.toBe(false) // fail: Expected successful parse of login scene with adjacent boxes
+      }
+    }
+  })
+
+  test("parses multiple vertically adjacent boxes correctly", t => {
+    // Simpler test case with just the adjacent boxes pattern
+    let adjacentBoxesWireframe = `
+@scene: test
+
++-----------------------------+
+|                             |
+|  +------------------------+ |
+|  | #box1                  | |
+|  +------------------------+ |
+|  +------------------------+ |
+|  | #box2                  | |
+|  +------------------------+ |
+|  +------------------------+ |
+|  | #box3                  | |
+|  +------------------------+ |
+|                             |
++-----------------------------+
+`
+
+    let result = Parser.parse(adjacentBoxesWireframe)
+
+    switch result {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        // All three input boxes should be parsed
+        let inputCount = countElements(scene.elements, el => {
+          switch el {
+          | Input(_) => true
+          | _ => false
+          }
+        })
+        t->expect(inputCount)->Expect.toBe(3)
+
+        // Verify specific inputs exist
+        let box1 = findElement(scene.elements, el => {
+          switch el {
+          | Input({id: "box1"}) => true
+          | _ => false
+          }
+        })
+        t->expect(box1)->Expect.not->Expect.toBe(None)
+
+        let box2 = findElement(scene.elements, el => {
+          switch el {
+          | Input({id: "box2"}) => true
+          | _ => false
+          }
+        })
+        t->expect(box2)->Expect.not->Expect.toBe(None)
+
+        let box3 = findElement(scene.elements, el => {
+          switch el {
+          | Input({id: "box3"}) => true
+          | _ => false
+          }
+        })
+        t->expect(box3)->Expect.not->Expect.toBe(None)
+      }
+    | Error(errors) => {
+        Console.error2("Parse errors:", errors)
+        t->expect(true)->Expect.toBe(false) // fail: Expected successful parse of multiple adjacent boxes
+      }
+    }
+  })
+})
+
 // Test Suite Summary
 //
 // This test suite validates:
@@ -1099,8 +1267,10 @@ describe("E2E-13: Line number offset in warnings with scene directives (Issue #5
 // 10. E2E-10: Complete registration flow
 // 11. E2E-11: Dashboard with multiple components
 // 12. E2E-12: Mixed valid and invalid boxes
+// 13. E2E-13: Line number offset correction (Issue #5, #9)
+// 14. E2E-14: Vertically adjacent boxes (Issue #18)
 //
-// Total Test Cases: 14 (12 describe blocks with multiple assertions)
+// Total Test Cases: 16 (14 describe blocks with multiple assertions)
 // Coverage: Comprehensive integration validation of all parser stages
 //
 // To run:
