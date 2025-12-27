@@ -1450,6 +1450,186 @@ describe("E2E-15: Correct Spacer Count Between Elements (Issue #19)", _t => {
   })
 })
 
+// =============================================================================
+// E2E-16: Parse Feature Comparison Table (Issue #20)
+// Regression test for GitHub issue #20: Comparison scene renders as blank white
+// screen due to parsing errors when table has multi-column layout.
+// =============================================================================
+
+describe("E2E-16: Parse Feature Comparison Table (Issue #20)", _t => {
+  test("parses comparison table scene with multi-column cells", t => {
+    // This wireframe reproduces the exact issue from #20:
+    // A feature comparison table with 4 columns that share borders.
+    // The parser must correctly detect the outer box and parse the content.
+    let comparisonWireframe = `
+@scene: comparison
+
++-----------------------------------------------------------------------+
+|                       'Feature Comparison'                            |
+|                                                                       |
+|  +---------------+---------------+---------------+---------------+    |
+|  |   'Feature'   |    'Free'     |     'Pro'     | 'Enterprise'  |    |
+|  +---------------+---------------+---------------+---------------+    |
+|  | Projects      |       5       |      50       |   Unlimited   |    |
+|  | Storage       |     1GB       |     100GB     |     1TB       |    |
+|  | Users         |       1       |      10       |   Unlimited   |    |
+|  | Support       |    Email      |   Priority    |     24/7      |    |
+|  | Analytics     |      [ ]      |     [x]       |     [x]       |    |
+|  | API Access    |      [ ]      |     [x]       |     [x]       |    |
+|  | Custom Domain |      [ ]      |     [ ]       |     [x]       |    |
+|  | SSL Certs     |      [ ]      |     [x]       |     [x]       |    |
+|  | White Label   |      [ ]      |     [ ]       |     [x]       |    |
+|  | Integrations  |      [ ]      |     [x]       |     [x]       |    |
+|  +---------------+---------------+---------------+---------------+    |
+|                                                                       |
+|                           [ Back to Plans ]                           |
+|                                                                       |
++-----------------------------------------------------------------------+
+`
+
+    let result = Parser.parse(comparisonWireframe)
+
+    switch result {
+    | Ok((ast, _warnings)) => {
+        // Verify scene exists
+        t->expect(Belt.Array.length(ast.scenes))->Expect.toBe(1)
+
+        let scene = ast.scenes->Array.getUnsafe(0)
+        t->expect(scene.id)->Expect.toBe("comparison")
+
+        // CRITICAL: Elements array must NOT be empty
+        // This was the main symptom of issue #20
+        t->expect(Belt.Array.length(scene.elements))->Expect.Int.toBeGreaterThan(0)
+
+        // Verify 'Feature Comparison' title is parsed
+        let titleText = findElement(scene.elements, el => {
+          switch el {
+          | Text({content, emphasis: true}) => String.includes(content, "Feature Comparison")
+          | _ => false
+          }
+        })
+        t->expect(titleText)->Expect.not->Expect.toBe(None)
+
+        // Verify 'Back to Plans' button is parsed
+        let backButton = findElement(scene.elements, el => {
+          switch el {
+          | Button({text}) => String.includes(text, "Back to Plans")
+          | _ => false
+          }
+        })
+        t->expect(backButton)->Expect.not->Expect.toBe(None)
+      }
+    | Error(errors) => {
+        Console.error2("Parse errors:", errors)
+        t->expect(true)->Expect.toBe(false) // fail: Expected successful parse of comparison table
+      }
+    }
+  })
+
+  test("parses table with horizontally adjacent cells", t => {
+    // Simpler test case with a basic 2x2 table structure
+    let tableWireframe = `
+@scene: test
+
++-------------------------------------------+
+|                                           |
+|  +-----------+-----------+-----------+    |
+|  |  Header1  |  Header2  |  Header3  |    |
+|  +-----------+-----------+-----------+    |
+|  |  Cell 1   |  Cell 2   |  Cell 3   |    |
+|  +-----------+-----------+-----------+    |
+|                                           |
++-------------------------------------------+
+`
+
+    let result = Parser.parse(tableWireframe)
+
+    switch result {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        // Elements array must NOT be empty
+        t->expect(Belt.Array.length(scene.elements))->Expect.Int.toBeGreaterThan(0)
+      }
+    | Error(errors) => {
+        Console.error2("Parse errors:", errors)
+        t->expect(true)->Expect.toBe(false) // fail: Expected successful parse of table
+      }
+    }
+  })
+
+  test("parses multi-scene wireframe where one scene has table", t => {
+    // Multi-scene wireframe with table in second scene (mirrors Issue #20 structure)
+    let multiSceneWireframe = `
+@scene: pricing
+
++-------------------+
+|   'Pricing'       |
+|                   |
+|   [ View Table ]  |
++-------------------+
+
+---
+
+@scene: comparison
+
++-----------------------------------------------+
+|             'Feature Comparison'              |
+|                                               |
+|  +---------+---------+---------+---------+    |
+|  | Feature |  Free   |   Pro   |  Team   |    |
+|  +---------+---------+---------+---------+    |
+|  | Users   |    1    |   10    |   100   |    |
+|  +---------+---------+---------+---------+    |
+|                                               |
+|                [ Back ]                       |
++-----------------------------------------------+
+`
+
+    let result = Parser.parse(multiSceneWireframe)
+
+    switch result {
+    | Ok((ast, _warnings)) => {
+        // Should have 2 scenes
+        t->expect(Belt.Array.length(ast.scenes))->Expect.toBe(2)
+
+        // Find comparison scene
+        let comparisonScene = ast.scenes->Array.find(scene => scene.id === "comparison")
+        t->expect(comparisonScene)->Expect.not->Expect.toBe(None)
+
+        switch comparisonScene {
+        | Some(scene) => {
+            // CRITICAL: Comparison scene must have elements
+            t->expect(Belt.Array.length(scene.elements))->Expect.Int.toBeGreaterThan(0)
+
+            // Verify title and button are parsed
+            let hasTitle = hasElement(scene.elements, el => {
+              switch el {
+              | Text({emphasis: true}) => true
+              | _ => false
+              }
+            })
+            t->expect(hasTitle)->Expect.toBe(true)
+
+            let hasButton = hasElement(scene.elements, el => {
+              switch el {
+              | Button({text}) => String.includes(text, "Back")
+              | _ => false
+              }
+            })
+            t->expect(hasButton)->Expect.toBe(true)
+          }
+        | None => t->expect(true)->Expect.toBe(false) // fail: Comparison scene not found
+        }
+      }
+    | Error(errors) => {
+        Console.error2("Parse errors:", errors)
+        t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
+      }
+    }
+  })
+})
+
 // Test Suite Summary
 //
 // This test suite validates:
@@ -1468,8 +1648,9 @@ describe("E2E-15: Correct Spacer Count Between Elements (Issue #19)", _t => {
 // 13. E2E-13: Line number offset correction (Issue #5, #9)
 // 14. E2E-14: Vertically adjacent boxes (Issue #18)
 // 15. E2E-15: Correct spacer count between elements (Issue #19)
+// 16. E2E-16: Feature comparison table (Issue #20)
 //
-// Total Test Cases: 18 (15 describe blocks with multiple assertions)
+// Total Test Cases: 21 (16 describe blocks with multiple assertions)
 // Coverage: Comprehensive integration validation of all parser stages
 //
 // To run:

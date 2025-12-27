@@ -237,8 +237,38 @@ let traceBox = (grid: Grid.t, topLeft: Position.t): traceResult => {
           // in the next row at the left and right columns, NOT Corner characters (+).
           // If the next row has corners at both positions, this is likely the
           // bottom edge of one box immediately followed by the top edge of another.
+          //
+          // Issue #20 fix: Also check if this corner is a MIDDLE divider of a table.
+          // A middle divider has VLine characters in the PREVIOUS row at both corners.
+          // Example table structure:
+          //   +-----------+-----------+    <- Row 3: Top edge (valid)
+          //   |  Header1  |  Header2  |    <- Row 4: Content row
+          //   +-----------+-----------+    <- Row 5: Middle divider (INVALID as top edge)
+          //   |  Cell 1   |  Cell 2   |    <- Row 6: Content row
+          //   +-----------+-----------+    <- Row 7: Bottom edge
+          // Row 5 has VLines in both previous (row 4) AND next (row 6) rows,
+          // so it's a middle divider, not a valid top edge.
           let nextRow = topLeft.row + 1
-          let isValidTopEdge = if nextRow < grid.height {
+          let prevRow = topLeft.row - 1
+
+          // Check if previous row has VLines at both corners (indicates middle divider)
+          let isMiddleDivider = if prevRow >= 0 {
+            let prevLeftPos = Position.make(prevRow, topLeft.col)
+            let prevRightPos = Position.make(prevRow, topRight.col)
+            let leftChar = Grid.get(grid, prevLeftPos)
+            let rightChar = Grid.get(grid, prevRightPos)
+            // If previous row has VLine at BOTH positions, this is a middle divider
+            switch (leftChar, rightChar) {
+            | (Some(VLine), Some(VLine)) => true  // Previous row has content = middle divider
+            | _ => false
+            }
+          } else {
+            false  // No previous row = could be valid top edge
+          }
+
+          let isValidTopEdge = if isMiddleDivider {
+            false  // Middle dividers are not valid top edges
+          } else if nextRow < grid.height {
             let nextLeftPos = Position.make(nextRow, topLeft.col)
             let nextRightPos = Position.make(nextRow, topRight.col)
             let leftChar = Grid.get(grid, nextLeftPos)
