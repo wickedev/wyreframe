@@ -125,6 +125,31 @@ describe("AlignmentCalc", () => {
       // Should default to Left for zero-width boxes
       t->expect(result)->Expect.toEqual(Types.Left)
     })
+
+    test("handles issue #22: Sign In button should be Center-aligned", t => {
+      // Reproduces the bug from GitHub issue #22
+      // The button "[ Sign In ]" at column 12 in a 41-column box
+      // appeared centered visually but was detected as Left-aligned.
+      //
+      // Box: columns 0-40 (width 41), interior: columns 1-39 (38 chars)
+      // Content: "[ Sign In ]" = 11 characters at column 12
+      // leftSpace = 12 - 1 = 11
+      // rightSpace = 39 - 23 + 1 = 17 (contentEnd = 12 + 11 = 23)
+      // leftRatio = 11/38 = 0.289
+      // rightRatio = 17/38 = 0.447
+      // abs(leftRatio - rightRatio) = 0.158 (was just above 0.15 tolerance)
+      let bounds: Types.Bounds.t = {
+        top: 0,
+        left: 0,
+        bottom: 20,
+        right: 40,
+      }
+      let signInPosition = Types.Position.make(15, 12)
+      let result = AlignmentCalc.calculate("[ Sign In ]", signInPosition, bounds)
+
+      // The button should be detected as Center, not Left
+      t->expect(result)->Expect.toEqual(Types.Center)
+    })
   })
 
   describe("calculateWithStrategy", () => {

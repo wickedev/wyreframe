@@ -1630,6 +1630,153 @@ describe("E2E-16: Parse Feature Comparison Table (Issue #20)", _t => {
   })
 })
 
+// =============================================================================
+// E2E-17: Button Center Alignment Tolerance (Issue #22)
+// Regression test for GitHub issue #22: Sign In button renders left-aligned
+// despite being visually centered in the ASCII wireframe.
+// =============================================================================
+
+describe("E2E-17: Button Center Alignment Tolerance (Issue #22)", _t => {
+  test("Sign In button should be center-aligned when visually centered", t => {
+    // This wireframe reproduces the exact issue from #22:
+    // The "Sign In" button appears centered in the ASCII art but was
+    // being detected as Left-aligned due to strict tolerance.
+    //
+    // Button position: column 12
+    // Box interior: columns 1-39 (38 chars)
+    // leftSpace = 11, rightSpace = 17
+    // leftRatio = 0.289, rightRatio = 0.447
+    // abs(leftRatio - rightRatio) = 0.158 (was just above 0.15 tolerance)
+    let loginWireframe = `
+@scene: login
+
++---------------------------------------+
+|                                       |
+|            'Welcome Back'             |
+|                                       |
+|  +------------------------------+     |
+|  | #email                       |     |
+|  +------------------------------+     |
+|                                       |
+|  +------------------------------+     |
+|  | #password                    |     |
+|  +------------------------------+     |
+|                                       |
+|       "Forgot your password?"         |
+|                                       |
+|           [ Sign In ]                 |
+|                                       |
+|              -----                    |
+|            or continue with           |
+|              -----                    |
+|                                       |
+|      [ Continue with Google ]         |
+|      [ Continue with GitHub ]         |
+|                                       |
++---------------------------------------+
+`
+
+    let result = Parser.parse(loginWireframe)
+
+    switch result {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+        t->expect(scene.id)->Expect.toBe("login")
+
+        // CRITICAL: The Sign In button MUST be center-aligned
+        // This was the main symptom of issue #22 - it was Left-aligned
+        let signInButton = findElement(scene.elements, el => {
+          switch el {
+          | Button({text, id}) =>
+            String.includes(text, "Sign In") || id === "sign-in"
+          | _ => false
+          }
+        })
+        t->expect(signInButton)->Expect.not->Expect.toBe(None)
+
+        // Verify the button is Center-aligned (not Left)
+        switch signInButton {
+        | Some(Button({align, text})) => {
+            // This is the actual bug fix verification
+            t->expect(align)->Expect.toEqual(Types.Center)
+            t->expect(text)->Expect.toBe("Sign In")
+          }
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Button not found
+        }
+
+        // Also verify the Continue with Google/GitHub buttons are Center-aligned
+        let googleButton = findElement(scene.elements, el => {
+          switch el {
+          | Button({text}) => String.includes(text, "Continue with Google")
+          | _ => false
+          }
+        })
+
+        switch googleButton {
+        | Some(Button({align})) => t->expect(align)->Expect.toEqual(Types.Center)
+        | _ => t->expect(true)->Expect.toBe(false) // fail: Google button not found
+        }
+
+        let githubButton = findElement(scene.elements, el => {
+          switch el {
+          | Button({text}) => String.includes(text, "Continue with GitHub")
+          | _ => false
+          }
+        })
+
+        switch githubButton {
+        | Some(Button({align})) => t->expect(align)->Expect.toEqual(Types.Center)
+        | _ => t->expect(true)->Expect.toBe(false) // fail: GitHub button not found
+        }
+      }
+    | Error(errors) => {
+        Console.error2("Parse errors:", errors)
+        t->expect(true)->Expect.toBe(false) // fail: Expected successful parse
+      }
+    }
+  })
+
+  test("buttons near center should be detected as Center with more tolerance", t => {
+    // Test various button positions that should be considered "centered"
+    // even if they are slightly off from exact center
+    let wireframe = `
+@scene: test
+
++---------------------------------------+
+|                                       |
+|          [ Slightly Left ]            |
+|           [ Exact Center ]            |
+|            [ Slight Right ]           |
+|                                       |
++---------------------------------------+
+`
+
+    let result = Parser.parse(wireframe)
+
+    switch result {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        // All three buttons should be Center-aligned since they're
+        // roughly centered (within reasonable tolerance)
+        let buttonCount = countElements(scene.elements, el => {
+          switch el {
+          | Button({align: Center}) => true
+          | _ => false
+          }
+        })
+
+        // All 3 buttons should be detected as Center-aligned
+        t->expect(buttonCount)->Expect.toBe(3)
+      }
+    | Error(errors) => {
+        Console.error2("Parse errors:", errors)
+        t->expect(true)->Expect.toBe(false)
+      }
+    }
+  })
+})
+
 // Test Suite Summary
 //
 // This test suite validates:

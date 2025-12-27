@@ -52,9 +52,11 @@ let calculate = (
     let rightRatio = Int.toFloat(rightSpace) /. Int.toFloat(boxWidth)
 
     // Thresholds for alignment detection
+    // Note: centerTolerance increased from 0.15 to 0.2 to be more lenient
+    // This fixes issue #22 where visually centered buttons were detected as Left
     let leftThreshold = 0.2
     let rightThreshold = 0.2
-    let centerTolerance = 0.15
+    let centerTolerance = 0.2
 
     // Apply alignment rules
     if leftRatio < leftThreshold && rightRatio > 0.3 {
