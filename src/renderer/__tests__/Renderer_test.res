@@ -228,6 +228,39 @@ describe("Renderer", () => {
     })
   })
 
+  describe("isNoiseText - Issue #16: Empty lines should be preserved", () => {
+    test("returns false for empty string (empty lines should be preserved)", t => {
+      // Empty lines in wireframes should NOT be treated as noise
+      // They represent intentional vertical spacing
+      t->expect(Renderer.isNoiseText(""))->Expect.toBe(false)
+    })
+
+    test("returns false for whitespace-only string (empty lines should be preserved)", t => {
+      // Lines with only spaces should be preserved as spacing
+      t->expect(Renderer.isNoiseText("   "))->Expect.toBe(false)
+    })
+
+    test("returns true for box border patterns with pipes", t => {
+      t->expect(Renderer.isNoiseText("|"))->Expect.toBe(true)
+    })
+
+    test("returns true for box border patterns with plus", t => {
+      t->expect(Renderer.isNoiseText("+---+"))->Expect.toBe(true)
+    })
+
+    test("returns true for horizontal border", t => {
+      t->expect(Renderer.isNoiseText("---"))->Expect.toBe(true)
+    })
+
+    test("returns false for actual text content", t => {
+      t->expect(Renderer.isNoiseText("Hello World"))->Expect.toBe(false)
+    })
+
+    test("returns false for text with surrounding spaces", t => {
+      t->expect(Renderer.isNoiseText("  Sarah Johnson  "))->Expect.toBe(false)
+    })
+  })
+
   describe("navigation action edge cases", () => {
     test("Goto with condition is still a navigation action", t => {
       let action = Goto({

@@ -172,10 +172,12 @@ let defaultStyles = `
 // ============================================================================
 
 // Noise text filter - filters out box border characters
+// Note: Empty lines are NOT noise - they represent intentional vertical spacing (Issue #16)
 let isNoiseText = (content: string): bool => {
   let trimmed = content->String.trim
   if trimmed == "" {
-    true
+    // Empty lines should be preserved as vertical spacing
+    false
   } else {
     // Box border patterns: +---+, |, ===, etc.
     let borderPattern = %re("/^[+|=\-\s]+$/")
