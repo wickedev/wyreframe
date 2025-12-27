@@ -352,9 +352,9 @@ describe('mixed text and link content (Issue #14)', () => {
     const wireframe = `
 @scene: test
 
-+------------------------------------+
-|  Please "click here" to continue  |
-+------------------------------------+
++---------------------------------+
+| Please "click here" to continue |
++---------------------------------+
 `;
 
     const result = parse(wireframe);
