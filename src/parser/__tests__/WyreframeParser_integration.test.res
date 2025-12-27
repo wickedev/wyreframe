@@ -1252,6 +1252,204 @@ describe("E2E-14: Parse Vertically Adjacent Boxes (Issue #18)", _t => {
   })
 })
 
+// =============================================================================
+// E2E-15: Correct Spacer Count Between Elements (Issue #19)
+// Regression test for GitHub issue #19: Incorrect spacer count between
+// input boxes and text elements.
+// =============================================================================
+
+describe("E2E-15: Correct Spacer Count Between Elements (Issue #19)", _t => {
+  test("no spacers should be generated for rows inside child box bounds", t => {
+    // This wireframe has two input boxes that are vertically adjacent.
+    // BUG: Spacers are being generated at rows that are INSIDE the child
+    // boxes' vertical bounds, which is incorrect.
+    //
+    // For example, if email box has bounds top=5, bottom=7, then NO spacers
+    // should exist at rows 5, 6, or 7 because those rows are occupied by
+    // the email box itself.
+    let loginWireframe = `
+@scene: login
+
++---------------------------------------+
+|                                       |
+|            'Welcome Back'             |
+|                                       |
+|  +----------------------------------+ |
+|  | #email                           | |
+|  +----------------------------------+ |
+|  +----------------------------------+ |
+|  | #password                        | |
+|  +----------------------------------+ |
+|                                       |
+|                                       |
+|  "Forgot your password?"              |
+|                                       |
+|       [ Sign In ]                     |
+|                                       |
++---------------------------------------+
+`
+
+    let result = Parser.parse(loginWireframe)
+
+    switch result {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        // Collect all elements
+        let allElements = collectAllElements(scene.elements)
+
+        // Find all child boxes (boxes that contain inputs)
+        let childBoxes = allElements->Array.filter(el => {
+          switch el {
+          | Types.Box({children}) => {
+              children->Array.some(child => {
+                switch child {
+                | Types.Input(_) => true
+                | _ => false
+                }
+              })
+            }
+          | _ => false
+          }
+        })
+
+        // Collect all child box bounds
+        let childBoxBounds = childBoxes->Array.filterMap(el => {
+          switch el {
+          | Types.Box({bounds}) => Some(bounds)
+          | _ => None
+          }
+        })
+
+        // Find all spacers
+        let allSpacers = allElements->Array.filter(el => {
+          switch el {
+          | Types.Spacer(_) => true
+          | _ => false
+          }
+        })
+
+        // Check: NO spacer should be at a row that is within any child box bounds
+        let spacersInsideChildBoxes = allSpacers->Array.filter(el => {
+          switch el {
+          | Types.Spacer({position}) => {
+              // Check if this spacer's row is within any child box's vertical bounds
+              childBoxBounds->Array.some(b => {
+                position.row >= b.top && position.row <= b.bottom
+              })
+            }
+          | _ => false
+          }
+        })
+
+        // CRITICAL: No spacers should exist inside child box bounds
+        // If there are any, that's the bug!
+        t->expect(Array.length(spacersInsideChildBoxes))->Expect.toBe(0)
+      }
+    | Error(errors) => {
+        Console.error2("Parse errors:", errors)
+        t->expect(true)->Expect.toBe(false)
+      }
+    }
+  })
+
+  test("generates correct number of spacers for empty lines between elements", t => {
+    // Between password box and "Forgot your password?" text, there are
+    // 2 empty lines in the ASCII wireframe, so exactly 2 spacers should
+    // be generated.
+    let loginWireframe = `
+@scene: login
+
++---------------------------------------+
+|                                       |
+|            'Welcome Back'             |
+|                                       |
+|  +----------------------------------+ |
+|  | #email                           | |
+|  +----------------------------------+ |
+|  +----------------------------------+ |
+|  | #password                        | |
+|  +----------------------------------+ |
+|                                       |
+|                                       |
+|  "Forgot your password?"              |
+|                                       |
+|       [ Sign In ]                     |
+|                                       |
++---------------------------------------+
+`
+
+    let result = Parser.parse(loginWireframe)
+
+    switch result {
+    | Ok((ast, _warnings)) => {
+        let scene = ast.scenes->Array.getUnsafe(0)
+
+        // Collect all elements
+        let allElements = collectAllElements(scene.elements)
+
+        // Find the password box and the "Forgot your password?" link
+        let passwordBox = allElements->Array.find(el => {
+          switch el {
+          | Types.Box({children}) => {
+              children->Array.some(child => {
+                switch child {
+                | Types.Input({id: "password"}) => true
+                | _ => false
+                }
+              })
+            }
+          | _ => false
+          }
+        })
+
+        let forgotLink = allElements->Array.find(el => {
+          switch el {
+          | Types.Link({text}) => String.includes(text, "Forgot your password")
+          | _ => false
+          }
+        })
+
+        // Get row positions
+        let passwordBoxBottom = switch passwordBox {
+        | Some(Types.Box({bounds})) => Some(bounds.bottom)
+        | _ => None
+        }
+
+        let forgotLinkRow = switch forgotLink {
+        | Some(Types.Link({position})) => Some(position.row)
+        | _ => None
+        }
+
+        switch (passwordBoxBottom, forgotLinkRow) {
+        | (Some(pBottom), Some(linkRow)) => {
+            // Count spacers between password box and link
+            let spacersBetween = allElements->Array.filter(el => {
+              switch el {
+              | Types.Spacer({position}) => {
+                  position.row > pBottom && position.row < linkRow
+                }
+              | _ => false
+              }
+            })
+
+            // CRITICAL: Exactly 2 spacers should exist (for 2 empty lines)
+            t->expect(Array.length(spacersBetween))->Expect.toBe(2)
+          }
+        | _ => {
+            t->expect(passwordBox)->Expect.not->Expect.toBe(None)
+            t->expect(forgotLink)->Expect.not->Expect.toBe(None)
+          }
+        }
+      }
+    | Error(errors) => {
+        Console.error2("Parse errors:", errors)
+        t->expect(true)->Expect.toBe(false)
+      }
+    }
+  })
+})
+
 // Test Suite Summary
 //
 // This test suite validates:
@@ -1269,8 +1467,9 @@ describe("E2E-14: Parse Vertically Adjacent Boxes (Issue #18)", _t => {
 // 12. E2E-12: Mixed valid and invalid boxes
 // 13. E2E-13: Line number offset correction (Issue #5, #9)
 // 14. E2E-14: Vertically adjacent boxes (Issue #18)
+// 15. E2E-15: Correct spacer count between elements (Issue #19)
 //
-// Total Test Cases: 16 (14 describe blocks with multiple assertions)
+// Total Test Cases: 18 (15 describe blocks with multiple assertions)
 // Coverage: Comprehensive integration validation of all parser stages
 //
 // To run:

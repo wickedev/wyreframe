@@ -1083,11 +1083,25 @@ let parseContentLine = (
   let trimmed = line->String.trim
 
   // Issue #16: Preserve empty lines as Spacer elements for vertical spacing
+  // Issue #19: But don't create Spacers for rows that are within child box bounds
   if trimmed === "" {
     let row = contentStartRow + lineIndex
     let baseCol = box.bounds.left + 1
-    let position = Position.make(row, baseCol)
-    Some(Spacer({position: position}))
+
+    // Check if this row is within any child box's vertical bounds
+    // If so, skip creating a Spacer (Issue #19: incorrect spacer count)
+    let rowWithinChildBox = box.children->Array.some(child => {
+      let b = child.bounds
+      row >= b.top && row <= b.bottom
+    })
+
+    if rowWithinChildBox {
+      // Skip spacer for rows occupied by child boxes
+      None
+    } else {
+      let position = Position.make(row, baseCol)
+      Some(Spacer({position: position}))
+    }
   } else if isNoiseText(trimmed) {
     // Filter out border/noise text - don't create any element
     None
