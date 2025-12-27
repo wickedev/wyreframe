@@ -164,6 +164,7 @@ let defaultStyles = `
   .align-right { text-align:right; }
   .wf-row.align-center { justify-content:center; }
   .wf-row.align-right { justify-content:flex-end; }
+  .wf-row.distribute { justify-content:space-between; }
   .wf-button.align-center, .wf-link.align-center { margin-left:auto; margin-right:auto; }
   .wf-button.align-right, .wf-link.align-right { margin-left:auto; margin-right:0; }
 `
@@ -208,6 +209,48 @@ let applyAlignment = (el: DomBindings.element, align: alignment): unit => {
   switch alignmentToClass(align) {
   | Some(cls) => el->DomBindings.classList->DomBindings.add(cls)
   | None => ()
+  }
+}
+
+/**
+ * Get the alignment of an element (for buttons, links, text).
+ */
+let getElementAlignment = (elem: element): option<alignment> => {
+  switch elem {
+  | Button({align, _}) => Some(align)
+  | Link({align, _}) => Some(align)
+  | Text({align, _}) => Some(align)
+  | _ => None
+  }
+}
+
+/**
+ * Check if Row children have distributed alignments (Left/Center/Right pattern).
+ * This indicates the buttons should be distributed using justify-content: space-between.
+ *
+ * Issue #23: When buttons are positioned across a row with different alignments
+ * (e.g., [ Google ]  [ Apple ]  [ GitHub ] with Left/Center/Right),
+ * use flexbox space-between distribution instead of per-element alignment.
+ */
+let hasDistributedChildren = (children: array<element>): bool => {
+  // Get all child alignments
+  let alignments = children
+    ->Array.filterMap(getElementAlignment)
+
+  // Need at least 2 elements to be considered distributed
+  if alignments->Array.length < 2 {
+    false
+  } else {
+    // Check if we have different alignments
+    let hasLeft = alignments->Array.some(a => a == Left)
+    let hasCenter = alignments->Array.some(a => a == Center)
+    let hasRight = alignments->Array.some(a => a == Right)
+
+    // Distributed means we have at least 2 different alignments
+    let differentAlignmentCount =
+      (hasLeft ? 1 : 0) + (hasCenter ? 1 : 0) + (hasRight ? 1 : 0)
+
+    differentAlignmentCount >= 2
   }
 }
 
@@ -435,7 +478,13 @@ let rec renderElement = (
   | Row({children, align}) => {
       let row = DomBindings.document->DomBindings.createElement("div")
       row->DomBindings.setClassName("wf-row")
-      applyAlignment(row, align)
+
+      // Issue #23: Use space-between distribution for rows with distributed alignments
+      if hasDistributedChildren(children) {
+        row->DomBindings.classList->DomBindings.add("distribute")
+      } else {
+        applyAlignment(row, align)
+      }
 
       children->Array.forEach(child => {
         switch renderElement(child, ~onAction?, ~onDeadEnd?) {

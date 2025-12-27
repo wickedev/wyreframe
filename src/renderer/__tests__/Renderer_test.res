@@ -366,4 +366,123 @@ describe("Renderer", () => {
       t->expect(Renderer.hasNavigationAction(actions))->Expect.toBe(true)
     })
   })
+
+  describe("Issue #23: Row button distribution with flexbox justify-content", () => {
+    describe("getElementAlignment", () => {
+      test("returns Some(align) for Button elements", t => {
+        let button = Button({
+          id: "test",
+          text: "Test",
+          position: {row: 1, col: 1},
+          align: Center,
+          actions: [],
+        })
+        t->expect(Renderer.getElementAlignment(button))->Expect.toEqual(Some(Center))
+      })
+
+      test("returns Some(align) for Link elements", t => {
+        let link = Link({
+          id: "test",
+          text: "Test",
+          position: {row: 1, col: 1},
+          align: Right,
+          actions: [],
+        })
+        t->expect(Renderer.getElementAlignment(link))->Expect.toEqual(Some(Right))
+      })
+
+      test("returns Some(align) for Text elements", t => {
+        let text = Text({
+          content: "Test",
+          emphasis: false,
+          position: {row: 1, col: 1},
+          align: Left,
+        })
+        t->expect(Renderer.getElementAlignment(text))->Expect.toEqual(Some(Left))
+      })
+
+      test("returns None for Spacer elements", t => {
+        let spacer = Spacer({position: {row: 1, col: 1}})
+        t->expect(Renderer.getElementAlignment(spacer))->Expect.toEqual(None)
+      })
+
+      test("returns None for Divider elements", t => {
+        let divider = Divider({position: {row: 1, col: 1}})
+        t->expect(Renderer.getElementAlignment(divider))->Expect.toEqual(None)
+      })
+    })
+
+    describe("hasDistributedChildren", () => {
+      test("returns true for Left/Center/Right button pattern", t => {
+        let children = [
+          Button({id: "a", text: "A", position: {row: 1, col: 1}, align: Left, actions: []}),
+          Button({id: "b", text: "B", position: {row: 1, col: 10}, align: Center, actions: []}),
+          Button({id: "c", text: "C", position: {row: 1, col: 20}, align: Right, actions: []}),
+        ]
+        t->expect(Renderer.hasDistributedChildren(children))->Expect.toBe(true)
+      })
+
+      test("returns true for Left/Right pattern (2 different alignments)", t => {
+        let children = [
+          Button({id: "a", text: "A", position: {row: 1, col: 1}, align: Left, actions: []}),
+          Button({id: "b", text: "B", position: {row: 1, col: 20}, align: Right, actions: []}),
+        ]
+        t->expect(Renderer.hasDistributedChildren(children))->Expect.toBe(true)
+      })
+
+      test("returns true for Left/Center pattern (2 different alignments)", t => {
+        let children = [
+          Button({id: "a", text: "A", position: {row: 1, col: 1}, align: Left, actions: []}),
+          Button({id: "b", text: "B", position: {row: 1, col: 10}, align: Center, actions: []}),
+        ]
+        t->expect(Renderer.hasDistributedChildren(children))->Expect.toBe(true)
+      })
+
+      test("returns false for all Center-aligned buttons", t => {
+        let children = [
+          Button({id: "a", text: "A", position: {row: 1, col: 1}, align: Center, actions: []}),
+          Button({id: "b", text: "B", position: {row: 1, col: 10}, align: Center, actions: []}),
+          Button({id: "c", text: "C", position: {row: 1, col: 20}, align: Center, actions: []}),
+        ]
+        t->expect(Renderer.hasDistributedChildren(children))->Expect.toBe(false)
+      })
+
+      test("returns false for all Left-aligned buttons", t => {
+        let children = [
+          Button({id: "a", text: "A", position: {row: 1, col: 1}, align: Left, actions: []}),
+          Button({id: "b", text: "B", position: {row: 1, col: 10}, align: Left, actions: []}),
+        ]
+        t->expect(Renderer.hasDistributedChildren(children))->Expect.toBe(false)
+      })
+
+      test("returns false for single element", t => {
+        let children = [
+          Button({id: "a", text: "A", position: {row: 1, col: 1}, align: Center, actions: []}),
+        ]
+        t->expect(Renderer.hasDistributedChildren(children))->Expect.toBe(false)
+      })
+
+      test("returns false for empty array", t => {
+        let children: array<element> = []
+        t->expect(Renderer.hasDistributedChildren(children))->Expect.toBe(false)
+      })
+
+      test("works with mixed element types (Text and Link)", t => {
+        let children = [
+          Text({content: "Hello", emphasis: false, position: {row: 1, col: 1}, align: Left}),
+          Link({id: "link", text: "Click", position: {row: 1, col: 20}, align: Right, actions: []}),
+        ]
+        t->expect(Renderer.hasDistributedChildren(children))->Expect.toBe(true)
+      })
+
+      test("ignores elements without alignment (Spacer)", t => {
+        let children = [
+          Spacer({position: {row: 1, col: 1}}),
+          Button({id: "a", text: "A", position: {row: 1, col: 5}, align: Center, actions: []}),
+        ]
+        // Only one element with alignment, so not distributed
+        t->expect(Renderer.hasDistributedChildren(children))->Expect.toBe(false)
+      })
+    })
+  })
 })
