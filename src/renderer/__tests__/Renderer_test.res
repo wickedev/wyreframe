@@ -261,6 +261,104 @@ describe("Renderer", () => {
     })
   })
 
+  describe("Issue #16: Empty lines should render as spacer elements", () => {
+    let loginWireframe = `
++------------------------------------------+
+|                                          |
+|              'Welcome Back'              |
+|                                          |
+|         +----------------------------+   |
+|         | #email                     |   |
+|         +----------------------------+   |
+|                                          |
+|         +----------------------------+   |
+|         | #password                  |   |
+|         +----------------------------+   |
+|                                          |
+|              [ Sign In ]                 |
+|                                          |
+|                   ---                    |
+|                                          |
+|           [ Continue with Google ]       |
+|                                          |
+|           [ Continue with GitHub ]       |
+|                                          |
+|            "Forgot password?"            |
+|                                          |
++------------------------------------------+
+`
+
+    test("parses wireframe and includes spacer elements for empty lines", t => {
+      let parseResult = Parser.parse(loginWireframe)
+
+      switch parseResult {
+      | Ok((ast, _warnings)) => {
+          // Get first scene's elements
+          switch ast.scenes->Array.get(0) {
+          | Some(scene) => {
+              // Count all Text elements and empty text elements
+              let (totalTextCount, spacerCount) =
+                scene.elements->Array.reduce((0, 0), ((totalAcc, spacerAcc), elem) => {
+                  switch elem {
+                  | Box({children}) =>
+                    // Count text elements inside the box
+                    children->Array.reduce((totalAcc, spacerAcc), ((tAcc, sAcc), child) => {
+                      switch child {
+                      | Text({content}) => {
+                          let isSpacer = content->String.trim == ""
+                          (tAcc + 1, isSpacer ? sAcc + 1 : sAcc)
+                        }
+                      | _ => (tAcc, sAcc)
+                      }
+                    })
+                  | Text({content}) => {
+                      let isSpacer = content->String.trim == ""
+                      (totalAcc + 1, isSpacer ? spacerAcc + 1 : spacerAcc)
+                    }
+                  | _ => (totalAcc, spacerAcc)
+                  }
+                })
+
+              // Log for debugging
+              Console.log2("Total Text elements:", totalTextCount)
+              Console.log2("Spacer (empty) elements:", spacerCount)
+
+              // The wireframe has multiple empty lines that should be preserved as spacers
+              // Expecting at least 5 empty lines between content elements
+              t->expect(spacerCount >= 5)->Expect.toBe(true)
+            }
+          | None => t->expect(true)->Expect.toBe(false) // Should have at least one scene
+          }
+        }
+      | Error(_) => t->expect(true)->Expect.toBe(false) // Parsing should succeed
+      }
+    })
+
+    // Note: renderElement tests require DOM environment (jsdom)
+    // These tests verify the logic using isNoiseText which is the filtering function
+    test("isNoiseText returns false for empty content (spacers should not be filtered)", t => {
+      // Empty content should NOT be considered noise
+      t->expect(Renderer.isNoiseText(""))->Expect.toBe(false)
+    })
+
+    test("isNoiseText returns false for whitespace content (spacers should not be filtered)", t => {
+      // Whitespace-only content should NOT be considered noise
+      t->expect(Renderer.isNoiseText("   "))->Expect.toBe(false)
+    })
+
+    test("empty Text elements are preserved in rendering logic", t => {
+      // Verify the isNoiseText check used in renderElement would preserve empty lines
+      let emptyContent = ""
+      let whitespaceContent = "   "
+
+      // Both should return false (NOT noise = should be rendered)
+      let emptyIsPreserved = !Renderer.isNoiseText(emptyContent)
+      let whitespaceIsPreserved = !Renderer.isNoiseText(whitespaceContent)
+
+      t->expect(emptyIsPreserved && whitespaceIsPreserved)->Expect.toBe(true)
+    })
+  })
+
   describe("navigation action edge cases", () => {
     test("Goto with condition is still a navigation action", t => {
       let action = Goto({

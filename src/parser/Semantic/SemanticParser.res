@@ -1062,9 +1062,20 @@ let parseContentLine = (
 ): option<element> => {
   let trimmed = line->String.trim
 
-  // Skip empty lines
+  // Issue #16: Preserve empty lines as spacer elements for vertical spacing
   if trimmed === "" {
-    None
+    // Calculate position for the empty line
+    let row = contentStartRow + lineIndex
+    let baseCol = box.bounds.left + 1
+    let position = Position.make(row, baseCol)
+
+    // Create a Text element with empty content to act as a vertical spacer
+    Some(Text({
+      content: "",
+      emphasis: false,
+      position: position,
+      align: Left,
+    }))
   } else {
     // Calculate position in grid
     let row = contentStartRow + lineIndex

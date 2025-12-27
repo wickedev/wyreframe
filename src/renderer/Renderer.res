@@ -435,7 +435,14 @@ let rec renderElement = (
           p->DomBindings.classList->DomBindings.add("emphasis")
         }
         applyAlignment(p, align)
-        p->DomBindings.setTextContent(content)
+        // Issue #16: Empty lines should render with visible height as spacers
+        let trimmed = content->String.trim
+        if trimmed === "" {
+          p->DomBindings.classList->DomBindings.add("wf-spacer")
+          p->DomBindings.setInnerHTML("&nbsp;")
+        } else {
+          p->DomBindings.setTextContent(content)
+        }
         Some(p)
       }
     }
