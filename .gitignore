@@ -10,6 +10,10 @@ lib/
 *.bs.js
 *.mjs
 *.gen.tsx
+# V2 parser's generated .mjs files ARE tracked so the public
+# `wyreframe/parser/v2` subpath export resolves even on clean checkouts
+# or installs with `--ignore-scripts` (where `prepare` doesn't run).
+!src/parser/v2/**/*.mjs
 
 # Test
 coverage/

@@ -6,9 +6,10 @@ This document defines the requirements for the Wyreframe Syntax v2.3 Parser. The
 
 ### Document Information
 
-- **Version**: 1.0.0
+- **Version**: 1.1.0
 - **Based on Spec**: Wyreframe Syntax v2.3 Specification
 - **Created**: 2025-12-27
+- **Updated**: 2026-06-08
 - **Status**: Draft
 
 ### Scope
@@ -322,13 +323,15 @@ The Parser does NOT handle the following:
 
 #### Acceptance Criteria
 
-1. WHEN Parser encounters multiple elements starting on the same text line THEN Parser SHALL process those elements as horizontal arrangement (row).
+1. WHEN Parser encounters multiple elements whose start positions share the same visual row THEN Parser SHALL process them as horizontal arrangement (Row). "Same row" is determined by the grid-aware `row` coordinate of the first non-whitespace token of each element.
 
-2. WHEN Parser encounters multiple elements starting on different text lines THEN Parser SHALL process those elements as vertical arrangement (column).
+2. WHEN Parser encounters elements whose start positions lie on different visual rows THEN Parser SHALL process them as vertical arrangement (Column).
 
-3. WHEN Parser determines the arrangement of multiline Containers THEN Parser SHALL determine same-line status based on the Container's start line (`+--`).
+3. WHEN Parser determines the arrangement of multiline Containers THEN Parser SHALL use the Container's top-border row (`+--`) as the Container's start row.
 
-4. WHEN Parser infers implicit layout THEN Parser SHALL NOT consider the spacing distance between elements for layout decisions.
+4. WHEN Parser infers implicit layout THEN Parser SHALL NOT consider the spacing distance between elements for direction decisions; spacing is only consulted by the optional `distribution` field.
+
+5. WHEN Parser emits a `layoutInfo` THEN Parser SHALL address children by index range into `parent.children` rather than duplicating child nodes (single source of truth).
 
 ---
 
@@ -340,7 +343,7 @@ The Parser does NOT handle the following:
 
 #### Acceptance Criteria
 
-1. WHEN Parser parses input THEN Parser SHALL match patterns according to the following priorities:
+1. WHEN Parser walks element parsers at a given source position THEN Parser SHALL probe them in descending priority order and dispatch to the first parser whose `canParse` returns `true`. Lower-priority parsers SHALL NOT be tried at that position once a match has occurred. Priorities:
    - Priority 115: String (`"..."`, including multiline)
    - Priority 110: Container ID (`+--#id--+`, `| #id |`)
    - Priority 105: PropPlaceholder (`${...}`)
@@ -351,14 +354,18 @@ The Parser does NOT handle the following:
    - Priority 80: Checkbox (`[x]`, `[ ]`)
    - Priority 70: Button (`[ ... ]`)
    - Priority 60: Link (`< ... >`)
-   - Priority 50: Divider labeled (`=== text ===`)
+   - Priority 50: Divider labeled bold (`=== text ===`)
    - Priority 48: Divider labeled (`--- text ---`)
    - Priority 45: Divider ID (`-#id-`)
    - Priority 40: Divider (`---`, `===`)
    - Priority 10: Container (`+--+`)
    - Priority 1: Text (fallback)
 
-2. WHEN Parser parses bracket `[ ]` elements THEN Parser SHALL discriminate in the following order: Select > Input > Checkbox > Button.
+2. WHEN two parsers' patterns overlap at the token level (notably the bracket family `[ ]`) THEN each parser's `canParse` SHALL implement the full disambiguation rule for its own pattern; the registry SHALL NOT contain bracket-family disambiguation logic.
+
+3. WHEN Parser parses bracket `[ ]` elements THEN the `canParse` ordering achieves: Select > Input > Checkbox > Button. The numeric priority gap exists for stable debugging and does not imply additional tie-breaking semantics.
+
+4. IF a parser's `canParse` returns `false` because the input was structurally close to a known pattern (one-token edit distance) THEN the Validator SHALL emit a near-miss warning (`LooksLikeButton`, `LooksLikeInput`, `LooksLikeCheckbox`, or `LooksLikeRadio`) with the corresponding `ruleId`.
 
 ---
 
@@ -370,22 +377,40 @@ The Parser does NOT handle the following:
 
 #### Acceptance Criteria
 
-1. WHEN Parser detects a syntax error THEN Parser SHALL create an error object containing the error message, line number, and column position.
+1. WHEN Parser detects a syntax error THEN Parser SHALL create an error object containing: error code, message, source location (start/end position with row, col, offset), and a `recoverable` flag.
 
-2. WHEN Parser detects a warning THEN Parser SHALL include the warning message and position information but continue parsing.
+2. WHEN Parser detects a warning THEN Parser SHALL include the warning code, message, source location, and (for heuristic-driven warnings) a `ruleId` traceable to the Heuristics Catalog.
 
-3. WHEN Parser finds an error THEN Parser SHALL use the following error message formats:
-   - `Error: Invalid ID format - ID line must contain only #id`
-   - `Error: Multiple ID declarations in container`
-   - `Error: Unclosed Input boundary - missing '__]'`
-   - `Error: Unclosed string literal - missing '"'`
-   - `Error: Unclosed container - missing bottom border`
-   - `Error: Missing block declaration - add @scene: or @component:`
+3. WHEN Parser finds an error THEN Parser SHALL use the following error code → message mapping:
+   - `InvalidIdFormat` → `Error: Invalid ID format - ID line must contain only #id`
+   - `MultipleIdDeclarations` → `Error: Multiple ID declarations in container`
+   - `UnclosedInput` → `Error: Unclosed Input boundary - missing '__]'`
+   - `UnclosedString` → `Error: Unclosed string literal - missing '"'`
+   - `UnclosedContainer` → `Error: Unclosed container - missing bottom border`
+   - `MissingBlockDeclaration` → `Error: Missing block declaration - add @scene: or @component:`
+   - `NestedBlockDeclaration` → `Error: @scene/@component cannot be nested inside another block`
+   - `MaxDepthExceeded` → `Error: Container nesting exceeded maxDepth`
 
-4. WHEN Parser finds a warning THEN Parser SHALL use the following warning message formats:
-   - `Warning: PropPlaceholder outside @component - will render as literal`
-   - `Warning: Unknown emoji shortcode ':name:' - rendering as text`
-   - `Warning: Mixed label and ID in divider - treating as text`
+4. WHEN Parser finds a warning THEN Parser SHALL use the following warning code → message mapping:
+   - **Spec-mandated:**
+     - `PropOutsideComponent` → `Warning: PropPlaceholder outside @component - will render as literal`
+     - `UnknownEmoji(name)` → `Warning: Unknown emoji shortcode ':<name>:' - rendering as text`
+     - `MixedDividerLabelId` → `Warning: Mixed label and ID in divider - treating as text`
+     - `MissingCheckboxLabel` → `Warning: Checkbox without label`
+     - `MissingRadioLabel` → `Warning: Radio without label`
+   - **Heuristic-driven** (each carries a `ruleId`):
+     - `MisalignedContainerCorner` (`ruleId: container.cornerAlignment`)
+     - `MisalignedContainerWall` (`ruleId: container.wallAlignment`)
+     - `InconsistentContainerWidth` (`ruleId: container.widthConsistency`)
+     - `RadioGroupAmbiguous` (`ruleId: radioGrouping.container`)
+     - `LooksLikeButton` / `LooksLikeInput` / `LooksLikeCheckbox` / `LooksLikeRadio` (`ruleId: nearMissPatterns`)
+   - **Cross-cutting (Validator):**
+     - `DuplicatePropName(name)` → `Warning: Duplicate prop '<name>' - last declaration wins`
+     - `DuplicateContainerId(id)` → `Warning: Duplicate container id '<id>'`
+     - `UnknownPropReference(name)` → `Warning: ${<name>} does not appear in @props`
+     - `MultipleRadiosSelected(group)` → `Warning: Multiple selected radios in group '<group>'`
+
+5. WHEN Parser reports any position THEN Parser SHALL use 0-based `row`, `col`, `offset` internally and convert to 1-based for human display only.
 
 ---
 
@@ -395,15 +420,19 @@ The Parser does NOT handle the following:
 
 #### Acceptance Criteria
 
-1. WHEN Parser completes parsing THEN Parser SHALL return a tree-structured AST object.
+1. WHEN Parser completes parsing THEN Parser SHALL return a tree-structured `parseResult` with `ast`, `errors`, `warnings`, and `success`.
 
-2. WHEN Parser generates an AST THEN Parser SHALL include type, properties, children, and position(line, column) information in each node.
+2. WHEN Parser generates an AST node THEN Parser SHALL include its `nodeType`, properties, `sourceLocation` (start/end with `row`, `col`, `offset`), and (for parents) `children`.
 
-3. WHEN Parser generates an AST THEN Parser SHALL set Scene or Component as the root node.
+3. WHEN Parser generates an AST THEN Parser SHALL set exactly one `SceneNode` or `ComponentNode` as the root.
 
-4. WHEN Parser generates an AST THEN Parser SHALL represent nested elements as parent-child relationships.
+4. WHEN Parser generates an AST THEN Parser SHALL represent nested elements as parent-child relationships, with children stored exactly once in `parent.children`. Layout groups SHALL reference children by index range, not by duplicating nodes.
 
-5. WHEN Parser generates an AST THEN Parser SHALL include implicit layout information as the layout property.
+5. WHEN Parser generates an AST THEN Parser SHALL include implicit layout information as the `layout` property on `SceneNode`, `ComponentNode`, and `ContainerNode`.
+
+6. WHEN Parser encounters a nested `@scene:` or `@component:` declaration THEN Parser SHALL emit `NestedBlockDeclaration` and start a new top-level block at that point. Scene/Component nesting is NOT permitted in v2.3.
+
+7. WHEN Container nesting depth would exceed `parseOptions.maxDepth` THEN Parser SHALL emit `MaxDepthExceeded`, parse the offending Container as an empty Container (no children), mark it with `containsErrorRecovery: true`, and continue parsing siblings.
 
 ---
 
@@ -415,11 +444,13 @@ The Parser does NOT handle the following:
 
 #### Acceptance Criteria
 
-1. WHEN Parser parses a wireframe of 100 lines or less THEN Parser SHALL complete within 50ms.
+1. WHEN Parser parses a wireframe of 100 lines or less on the reference platform THEN Parser SHALL complete within 50ms (best-of-5 wall time).
 
-2. WHEN Parser parses a wireframe of 1000 lines or less THEN Parser SHALL complete within 500ms.
+2. WHEN Parser parses a wireframe of 1000 lines or less on the reference platform THEN Parser SHALL complete within 500ms (best-of-5 wall time).
 
-3. WHILE Parser processes a large file THEN Parser SHALL NOT exceed memory usage of 10 times the input size.
+3. WHILE Parser processes a file THEN peak `heapUsed` delta during parse SHALL NOT exceed 10× the input byte size.
+
+4. **Reference platform** (for the above targets): Apple Silicon M-series or equivalent x86-64 (≥ 2.5 GHz, ≥ 8 GB RAM), Node.js ≥ 20, single-threaded, no parallel work. If a CI machine cannot meet the baseline, the threshold SHALL be adjusted in `vitest.config` with a comment linking back to this requirement, never silently relaxed.
 
 ---
 
@@ -457,11 +488,39 @@ The Parser does NOT handle the following:
 
 #### Acceptance Criteria
 
-1. WHEN Parser encounters text containing non-ASCII characters such as Korean, Japanese, or Chinese THEN Parser SHALL process those characters correctly.
+1. WHEN Parser encounters text containing non-ASCII characters such as Korean, Japanese, or Chinese THEN Parser SHALL process those characters correctly without corruption.
 
-2. WHEN Parser encounters text directly containing emoji characters (Unicode) THEN Parser SHALL process those characters correctly.
+2. WHEN Parser encounters text directly containing emoji characters (Unicode) THEN Parser SHALL process them at the grapheme-cluster level (never splitting a ZWJ sequence or surrogate pair).
 
-3. WHEN Parser calculates position information THEN Parser SHALL correctly consider Unicode characters when calculating column positions.
+3. WHEN Parser calculates the `col` coordinate THEN Parser SHALL use **visual columns**, not bytes or code points. East Asian Wide characters and emoji grapheme clusters SHALL count as 2 visual columns by default; combining marks SHALL count as 0.
+
+4. WHEN Parser encounters a TAB character THEN Parser SHALL expand it according to `parseOptions.tabSize` (default 4) when computing `col`.
+
+5. WHEN Parser calculates visual columns THEN it SHALL route the calculation through a single `UnicodeUtils` module; no other module SHALL count columns directly.
+
+6. Bidi text (RTL) is **out of scope for v2.3**; RTL characters SHALL be treated as LTR for column-counting purposes.
+
+---
+
+### Requirement 23: Heuristics and Tolerances
+
+**User Story:** As a developer, I want every parser tolerance to be explicit, named, and tunable, so that I can audit why my wireframe was interpreted a certain way and adjust thresholds without recompiling parser internals.
+
+**Reference**: design.md → Heuristics Catalog section.
+
+#### Acceptance Criteria
+
+1. WHEN Parser applies any non-strict rule (alignment tolerance, grouping proximity, near-miss detection) THEN that rule SHALL be defined in the central `Heuristics` module with a documented default and a rule ID.
+
+2. WHEN Parser emits a warning that resulted from a heuristic THEN the warning SHALL carry a `ruleId` matching the rule ID in the Heuristics Catalog.
+
+3. WHEN a user supplies `parseOptions.heuristics` (a partial override) THEN Parser SHALL merge it into the defaults; unspecified thresholds retain their defaults.
+
+4. WHERE the Heuristics Catalog defines a numeric threshold (e.g. `containerColumnTolerance`, `radioHorizontalGap`) THEN the test suite SHALL include boundary fixtures (just-inside, exact, just-outside) that lock the behavior at the threshold edge.
+
+5. WHEN a default threshold changes THEN the associated golden test fixtures SHALL be updated in the same change.
+
+6. WHEN Parser makes a heuristic decision that did not emit a warning (purely informational, e.g. choosing `text.center`) THEN the test harness SHALL be able to assert which rule fired (via a debug breadcrumb mechanism or equivalent).
 
 ---
 
@@ -483,11 +542,15 @@ The Parser does NOT handle the following:
 
 2. Both LF (`\n`) and CRLF (`\r\n`) line endings are supported.
 
-3. Tab characters are treated as 4 spaces.
+3. Tab characters expand according to `parseOptions.tabSize` (default 4) when computing visual columns.
 
-4. Container box characters (`+`, `-`, `|`) must be in exact positions.
+4. Container box characters (`+`, `-`, `|`) are visually aligned within the `containerColumnTolerance` and `containerWidthTolerance` heuristics (defaults: ±1 col, ±2 col). Off-by-one drift produces a warning, not a parse failure.
 
-5. Nested Containers must be completely contained within the parent Container's boundaries.
+5. Nested Containers must be completely contained within the parent Container's boundaries; an unclosed nested container triggers `errorRecovery.containerSync`.
+
+6. Wide characters (East Asian Wide, emoji grapheme clusters) count as 2 visual columns for grid alignment.
+
+7. Scene/Component blocks cannot be nested in v2.3; a nested block declaration is an error.
 
 ---
 
@@ -517,3 +580,18 @@ The Parser does NOT handle the following:
 | REQ-20 Extensibility | (Non-functional) |
 | REQ-21 Error Recovery | (Non-functional) |
 | REQ-22 Unicode | (Non-functional) |
+| REQ-23 Heuristics & Tolerances | design.md → Heuristics Catalog |
+
+---
+
+## Changelog
+
+- **1.1.0 (2026-06-08)** — Aligned with design.md v1.2.0.
+  - REQ-15: clarified grid-aware semantics ("same row" = same `row` coordinate); single-source-of-truth rule for `layoutInfo`.
+  - REQ-16: separated trial-order (priority) from disambiguation (`canParse`); added near-miss warning rule.
+  - REQ-17: added `NestedBlockDeclaration`, `MaxDepthExceeded` error codes; added 11 heuristic/cross-cutting warning codes with `ruleId`; positions are 0-based internally.
+  - REQ-18: added Scene/Component non-nesting (#6) and `maxDepth` enforcement (#7).
+  - REQ-19: added reference-platform clause for performance targets.
+  - REQ-22: rewrote in terms of visual columns, grapheme clusters, and `tabSize`.
+  - REQ-23 (new): Heuristics and Tolerances.
+  - Assumptions softened to match heuristic tolerances; explicit non-nesting assumption.

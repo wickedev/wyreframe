@@ -2,10 +2,10 @@
 
 ## Document Information
 
-- **Version**: 1.1.0
-- **Based on**: requirements.md, design.md
+- **Version**: 1.2.0
+- **Based on**: requirements.md v1.1.0, design.md v1.2.0
 - **Created**: 2025-12-27
-- **Updated**: 2025-12-27
+- **Updated**: 2026-06-08
 - **Implementation Language**: ReScript (with @rescript/core)
 - **Test Framework**: rescript-vitest
 - **Status**: Draft
@@ -19,18 +19,27 @@ This implementation plan provides a series of discrete, manageable coding steps 
 ## Phase 1: Foundation (Types & Utils)
 
 - [ ] 1. Set up parser module directory structure
-  - Create the directory structure as specified in design.md: `src/parser/v2/types/`, `src/parser/v2/lexer/`, `src/parser/v2/parser/`, `src/parser/v2/elements/`, `src/parser/v2/layout/`, `src/parser/v2/utils/`, `src/parser/v2/registry/`, `src/parser/v2/__tests__/`
+  - Create the directory structure as specified in design.md v1.2.0:
+    - `src/parser/v2/types/` (V2Types.res, Token.res, V2Errors.res)
+    - `src/parser/v2/lexer/` (Lexer.res, Scanner.res, TokenStream.res, **GridIndex.res**)
+    - `src/parser/v2/parser/` (BlockParser.res, ParseContext.res, Priority.res)
+    - `src/parser/v2/elements/` (V2ElementParser.res, V2ParserRegistry.res, per-element parsers)
+    - `src/parser/v2/layout/` (LayoutInferrer.res, RadioGrouper.res)
+    - `src/parser/v2/validator/` (Validator.res)
+    - `src/parser/v2/utils/` (PositionUtils.res, Slugify.res, UnicodeUtils.res, EscapeUtils.res, **Heuristics.res**)
+    - `src/parser/v2/registry/` (EmojiRegistry.res, ElementRegistry.res)
+    - `src/parser/v2/__tests__/` (with `heuristics/` and `perf/` subdirs)
   - Create placeholder `.res` files for each module
-  - _Requirements: REQ-20.1 (extensibility)_
+  - _Requirements: REQ-20.1, REQ-23_
   - _Complexity: S_
   - _Files: src/parser/v2/*_
 
 - [ ] 2. Implement core AST type definitions
   - [ ] 2.1 Create base types and Position records
-    - Implement `position` record with line, column, offset fields
+    - Implement `position` record with **`row`, `col`, `offset`** fields (0-based throughout; matches `Token.position`)
     - Implement `sourceLocation` record with start and end_ positions
     - Write unit tests for position and location creation
-    - _Requirements: REQ-18.2 (AST structure with position info)_
+    - _Requirements: REQ-17.5, REQ-18.2_
     - _Complexity: S_
     - _Files: src/parser/v2/types/V2Types.res, src/parser/v2/__tests__/types/V2Types_test.res_
 
@@ -49,13 +58,17 @@ This implementation plan provides a series of discrete, manageable coding steps 
     - Define recursive `astNode` variant with all node constructors
     - Define `sceneNode` record with slug, title, device, transition, children, layout
     - Define `componentNode` record with slug, props, children, layout
-    - Define `containerNode` record with id, name, children, layout, bounds
+    - Define `containerNode` record with id, name, children, layout, bounds, **`containsErrorRecovery`** flag
     - Define all element node records (textNode, buttonNode, linkNode, inputNode, selectNode, checkboxNode, radioNode, dividerNode)
-    - Define special node records (stringNode with multiline support, emojiNode, propPlaceholderNode, errorNode)
+    - Define special node records:
+      - `stringNode` with `content`, `multiline`, and `interpolations: array<interpolationContent>`
+      - `interpolationContent = Literal(string) | PropRef(propPlaceholderNode) | EmojiRef(emojiNode)` **(EmojiRef is new)**
+      - `emojiNode`, `propPlaceholderNode`, `errorNode`
     - Define `propDefinition` record
-    - Define `layoutInfo` and `elementGroup` records
+    - Define `layoutInfo` record with `direction`, `groups`, and **`distribution: option<distribution>`** (distribution lives in the same rec block, no longer standalone)
+    - Define `elementGroup` record with **`start: int`, `end_: int`** (half-open index range into `parent.children` — never store child nodes here), and `startRow: int`
     - Define type aliases: `blockNode`, `elementNode`, `specialNode`
-    - Write unit tests for node creation
+    - Write unit tests for node creation; assert children are NOT duplicated between `parent.children` and any `elementGroup`
     - _Requirements: REQ-1 to REQ-14, REQ-18.3, REQ-18.4_
     - _Complexity: M_
     - _Files: src/parser/v2/types/V2Types.res_
@@ -74,47 +87,54 @@ This implementation plan provides a series of discrete, manageable coding steps 
 - [ ] 3. Implement Error and Warning type definitions
   - [ ] 3.1 Create error type definitions
     - Define `severity` variant (Error, Warning)
-    - Define `errorCode` variant with all 6 error codes (InvalidIdFormat, MultipleIdDeclarations, UnclosedInput, UnclosedString, UnclosedContainer, MissingBlockDeclaration)
-    - Define `warningCode` variant with all 5 warning codes (PropOutsideComponent, UnknownEmoji, MixedDividerLabelId, MissingCheckboxLabel, MissingRadioLabel)
-    - Define `parseError` and `parseWarning` records
-    - _Requirements: REQ-17.1, REQ-17.3_
+    - Define `errorCode` variant with all 8 error codes:
+      `InvalidIdFormat`, `MultipleIdDeclarations`, `UnclosedInput`, `UnclosedString`, `UnclosedContainer`, `MissingBlockDeclaration`, **`NestedBlockDeclaration`**, **`MaxDepthExceeded`**
+    - Define `warningCode` variant with all warning codes:
+      - Spec: `PropOutsideComponent`, `UnknownEmoji(string)`, `MixedDividerLabelId`, `MissingCheckboxLabel`, `MissingRadioLabel`
+      - Heuristic-driven: `MisalignedContainerCorner`, `MisalignedContainerWall`, `InconsistentContainerWidth`, `RadioGroupAmbiguous`, `LooksLikeButton`, `LooksLikeInput`, `LooksLikeCheckbox`, `LooksLikeRadio`
+      - Cross-cutting: `DuplicatePropName(string)`, `DuplicateContainerId(string)`, `UnknownPropReference(string)`, `MultipleRadiosSelected(string)`
+    - Define `parseError` record (code, message, location, recoverable)
+    - Define `parseWarning` record with **`ruleId: option<string>`** field for heuristic traceability
+    - _Requirements: REQ-17.1, REQ-17.3, REQ-17.4, REQ-23.2_
     - _Complexity: S_
     - _Files: src/parser/v2/types/V2Errors.res_
 
   - [ ] 3.2 Create error message functions
-    - Implement `getErrorMessage` function with exact message strings from requirements
-    - Implement `getWarningMessage` function with exact warning strings
-    - Create helper functions: `makeError()`, `makeWarning()`
-    - Write unit tests for error/warning creation
+    - Implement `getErrorMessage(code) → string` covering all 8 error codes (REQ-17.3)
+    - Implement `getWarningMessage(code) → string` covering all warning codes (REQ-17.4)
+    - Create helpers: `makeError(~code, ~location, ~recoverable)` and `makeWarning(~code, ~location, ~ruleId=?)`
+    - Write unit tests asserting message text matches the REQ-17 mapping verbatim
     - _Requirements: REQ-17.3, REQ-17.4_
     - _Complexity: S_
     - _Files: src/parser/v2/types/V2Errors.res, src/parser/v2/__tests__/types/V2Errors_test.res_
 
-- [ ] 4. Implement Token type definitions
-  - Define `tokenType` variant (Identifier, Punctuation, Whitespace, Newline, String, Number, EOF)
-  - Define `t` record with tokenType, value, position fields
-  - Implement `make`, `isEof`, `isNewline`, `isWhitespace` helper functions
-  - Write unit tests for token creation and type checking
-  - _Requirements: REQ-18.2 (position info)_
+- [ ] 4. Implement Token type definitions (physical tokens, grid-aware)
+  - Define `position` record matching `V2Types.position`: `{ row, col, offset }` (0-based)
+  - Define `tokenKind` variant covering physical lexemes (NOT semantic):
+    `Identifier`, `Dashes(int)`, `Equals(int)`, `Plus`, `Pipe`, `LBracket`, `RBracket`, `LParen`, `RParen`, `LAngle`, `RAngle`, `Underscores(int)`, `Colon`, `Hash`, `Dollar`, `LBrace`, `RBrace`, `Asterisk`, `Quote`, `At`, `Comma`, `QuestionMark`, `Whitespace(int)`, `Newline`, `Other(string)`, `EOF`
+  - Define `t` record with `kind`, `text`, `position` (start), `endPosition` (exclusive)
+  - Implement `make`, `isEof`, `isNewline`, `isWhitespace` helpers
+  - Write unit tests for token creation, position correctness, and Unicode width attribution
+  - _Requirements: REQ-17.5, REQ-18.2, REQ-22.3_
   - _Complexity: S_
   - _Files: src/parser/v2/types/Token.res, src/parser/v2/__tests__/types/Token_test.res_
 
 - [ ] 5. Implement Parser options record
-  - Create `parseOptions` record with strict, emojiRegistry, tabSize, maxDepth
-  - Create `defaultOptions` with sensible defaults
-  - Write unit tests for options validation
-  - _Requirements: REQ-20.3 (custom emoji registry), REQ-21_
+  - Create `parseOptions` record with `strict`, `emojiRegistry`, `tabSize`, `maxDepth`, and **`heuristics: option<Heuristics.t>`** (partial overrides merged into defaults)
+  - Create `defaultOptions` with: `strict=false`, `emojiRegistry=None`, `tabSize=4`, `maxDepth=10`, `heuristics=None`
+  - Write unit tests for options merging (override → merged value, default for unspecified)
+  - _Requirements: REQ-18.7, REQ-20.3, REQ-21, REQ-23.3_
   - _Complexity: S_
   - _Files: src/parser/v2/parser/BlockParser.res_
 
 - [ ] 6. Implement utility functions
   - [ ] 6.1 Create Position tracking utilities
-    - Implement `advancePosition` for character-by-character tracking
-    - Implement `advanceLine` for newline handling
-    - Implement `calculateColumn` with Unicode-aware width
-    - Implement `tabToSpaces` (tab = 4 spaces per spec)
-    - Write unit tests for position tracking with various inputs
-    - _Requirements: REQ-17.1, REQ-22.3_
+    - Implement `advancePosition` advancing offset and col by visual width (NOT by codepoint count)
+    - Implement `advanceRow` for newline handling (resets col to 0)
+    - Implement `calculateCol` delegating visual-width computation to `UnicodeUtils`
+    - Implement `tabToVisualWidth(~tabSize, currentCol)` (tab stops, not "4 spaces")
+    - Write unit tests with mixed ASCII / CJK / emoji / tab inputs
+    - _Requirements: REQ-17.1, REQ-17.5, REQ-22.3, REQ-22.4_
     - _Complexity: M_
     - _Files: src/parser/v2/utils/PositionUtils.res, src/parser/v2/__tests__/utils/PositionUtils_test.res_
 
@@ -126,12 +146,14 @@ This implementation plan provides a series of discrete, manageable coding steps 
     - _Complexity: S_
     - _Files: src/parser/v2/utils/Slugify.res, src/parser/v2/__tests__/utils/Slugify_test.res_
 
-  - [ ] 6.3 Create Unicode utilities
-    - Implement `getCharWidth` for display width calculation
-    - Implement `isNonAscii` for character classification
-    - Implement `getCodePoint` for Unicode code point extraction
-    - Write unit tests for Unicode strings and emoji
-    - _Requirements: REQ-22.1, REQ-22.2, REQ-22.3_
+  - [ ] 6.3 Create Unicode utilities (sole owner of visual-width math)
+    - Implement `graphemeWidth(str) → int` — visual width of one grapheme cluster (narrow=1, wide=2, combining=0)
+    - Implement `foldGraphemes` — iterate grapheme clusters with `(offsetStart, offsetEnd, visualWidth)`
+    - Implement `visualWidth(str, ~startCol=?, ~tabSize=?) → int` (tab-aware)
+    - Cover East Asian Wide, emoji ZWJ sequences, surrogate pairs, combining marks
+    - Write unit tests for all categories listed above
+    - **No other module is allowed to count columns directly** (enforced by review)
+    - _Requirements: REQ-22.1, REQ-22.2, REQ-22.3, REQ-22.5_
     - _Complexity: M_
     - _Files: src/parser/v2/utils/UnicodeUtils.res, src/parser/v2/__tests__/utils/UnicodeUtils_test.res_
 
@@ -143,70 +165,90 @@ This implementation plan provides a series of discrete, manageable coding steps 
     - _Complexity: S_
     - _Files: src/parser/v2/utils/EscapeUtils.res, src/parser/v2/__tests__/utils/EscapeUtils_test.res_
 
+  - [ ] 6.5 Create Heuristics module (single source of tolerances)
+    - Define `Heuristics.t` record with all thresholds from design.md → Heuristics Catalog:
+      - `containerColumnTolerance` (default 1)
+      - `containerWidthTolerance` (default 2)
+      - `radioHorizontalGap` (default 6)
+      - `radioVerticalColumnTolerance` (default 1)
+      - `radioMaxBlankRows` (default 0)
+      - `centerSymmetryThreshold` (default 0.15)
+      - `rightAlignThreshold` (default 0.10)
+      - `dividerMinRun` (default 3)
+      - `nearMissTokenDistance` (default 1)
+    - Implement `default: t` and `make(~overrides=?) → t` (shallow merge of partial overrides)
+    - Export rule-ID constants as module values (e.g. `Rule.containerWallAlignment = "container.wallAlignment"`) so callers reference them symbolically, never as bare strings
+    - Write unit tests for default values, merge behavior, and rule-ID stability
+    - _Requirements: REQ-23.1, REQ-23.3_
+    - _Complexity: S_
+    - _Files: src/parser/v2/utils/Heuristics.res, src/parser/v2/__tests__/utils/Heuristics_test.res_
+
 ---
 
 ## Phase 2: Lexer
 
-- [ ] 7. Implement Character Scanner
-  - Create `Scanner.t` type with source, current, line, column fields
+- [ ] 7. Implement Character Scanner (Unicode-aware)
+  - Create `Scanner.t` type with source, current offset, current row/col
   - Implement `make` from source string
-  - Implement `peek`, `advance`, `isAtEnd`, `lookAhead` functions
-  - Handle UTF-8 correctly for multi-byte characters
-  - Handle both LF and CRLF line endings
-  - Write unit tests for character-by-character scanning
-  - _Requirements: REQ-22 (Unicode support), Assumptions 1, 2_
+  - Implement `peek`, `advance` (uses `UnicodeUtils.graphemeWidth` to step col by visual width), `isAtEnd`, `lookAhead`
+  - Normalize CRLF → LF at the scanner level
+  - Write unit tests with mixed ASCII/CJK/emoji and both line endings
+  - _Requirements: REQ-22.1, REQ-22.2, REQ-22.3, Assumptions 1, 2, 6_
   - _Complexity: M_
   - _Files: src/parser/v2/lexer/Scanner.res, src/parser/v2/__tests__/lexer/Scanner_test.res_
 
-- [ ] 8. Implement Token Stream utilities
-  - Create `TokenStream.t` type with tokens array and current index
-  - Implement `make`, `peek`, `next`, `lookAhead`, `rewind`, `isAtEnd` functions
-  - Implement `getCurrentPosition` returning source position
-  - Write unit tests for token stream operations
-  - _Requirements: REQ-16 (priority system needs look-ahead)_
+- [ ] 8. Implement Token Stream (cursor with save/restore)
+  - Create `TokenStream.t` (opaque) wrapping a `array<Token.t>` and a cursor
+  - Implement `make`, `peek`, `peekAt(stream, n)` (0 = current), `next`, `isAtEnd`, `position`
+  - Implement **`save: t => int`** (snapshot cursor) and **`restore: (t, int) => unit`** (rollback) — used by parsers' `canParse` for read-only probing
+  - Document the contract: `canParse` MUST NOT advance the cursor on a `false` return
+  - Write unit tests for save/restore correctness and isolation
+  - _Requirements: REQ-16.1, REQ-16.2 (canParse contract)_
   - _Complexity: S_
   - _Files: src/parser/v2/lexer/TokenStream.res, src/parser/v2/__tests__/lexer/TokenStream_test.res_
 
-- [ ] 9. Implement Lexer main module
-  - Create `Lexer.t` type wrapping Scanner with token buffer
-  - Implement `make` from source string
-  - Implement `tokenize` returning TokenStream.t
-  - Implement `nextToken` for single token generation
-  - Classify tokens: Identifier, Punctuation, Whitespace, Newline, EOF
-  - Write unit tests for tokenizing various inputs
-  - _Requirements: REQ-19 (performance), REQ-22 (Unicode)_
+- [ ] 9. Implement Lexer main module (eager tokenization)
+  - Implement `tokenize(~tabSize=?, source) → array<Token.t>` — eagerly tokenize the entire input
+  - Emit physical tokens per the `tokenKind` variant (Task 4); semantic disambiguation belongs to parsers
+  - Tokenize runs of `-`, `=`, `_` as `Dashes(n)`, `Equals(n)`, `Underscores(n)` (length attached)
+  - Tokenize runs of `' '`/`\t` as `Whitespace(visualWidth)`
+  - Attach `position` (start) and `endPosition` (exclusive) to each token
+  - Write unit tests for tokenizing every kind, Unicode-mixed input, tab stops, and Windows line endings
+  - **Lazy tokenization is rejected** (see design.md → Performance Considerations)
+  - _Requirements: REQ-19, REQ-22, Assumptions 1-3, 6_
   - _Complexity: M_
   - _Files: src/parser/v2/lexer/Lexer.res, src/parser/v2/__tests__/lexer/Lexer_test.res_
 
-- [ ] 10. Add Lexer line-based utilities
-  - Implement `getCurrentLine` returning entire current line as string
-  - Implement `peekLine` to view next line without consuming
-  - Implement `skipToNextLine` to advance past newline
-  - Implement `getLineTokens` returning tokens for current line only
-  - Implement `getIndentation` returning leading whitespace count
-  - Write unit tests for line utilities
-  - _Requirements: REQ-2 (Container), REQ-15 (Implicit Layout)_
-  - _Complexity: S_
-  - _Files: src/parser/v2/lexer/Lexer.res_
-
-- [ ] 11. Add Lexer pattern detection utilities
-  - Implement `matchPattern` for simple string pattern matching
-  - Implement `matchRegex` for regex-based pattern matching
-  - Implement `savePosition` and `restorePosition` for backtracking
-  - Implement `consumeUntil` to consume tokens until pattern match
-  - Write unit tests for pattern detection
-  - _Requirements: REQ-16 (Priority System)_
+- [ ] 10. Implement GridIndex (2D random access)
+  - Create `GridIndex.t` (opaque): row-keyed sparse map of column → token index
+  - Implement `make(array<Token.t>) → t`
+  - Implement `tokenAt(~row, ~col) → option<Token.t>` returning the token whose span covers (row, col), or None for whitespace/empty
+  - Implement `charAt(~row, ~col) → string` (single grapheme; returns " " if out of range)
+  - Implement `rowTokens(~row) → array<Token.t>` (left-to-right)
+  - Implement `lastRow → int`
+  - Performance: O(1) `charAt` after construction; pure whitespace rows take O(1) memory
+  - Write unit tests including: corner alignment lookups, wide-character columns, out-of-range queries
+  - _Requirements: REQ-2 (Container detection), REQ-15 (Implicit Layout), REQ-19_
   - _Complexity: M_
+  - _Files: src/parser/v2/lexer/GridIndex.res, src/parser/v2/__tests__/lexer/GridIndex_test.res_
+
+- [ ] 11. Lexer pattern detection helpers (thin layer over TokenStream)
+  - Implement `matchKindSequence(stream, kinds) → bool` (peek-only) — checks an expected token-kind sequence starting at current cursor without consuming
+  - Implement `findOnCurrentRow(stream, kind) → option<int>` — returns the token-stream index of the next occurrence of `kind` on the current row (no row crossing)
+  - These are read-only conveniences; mutating advancement still uses `next`
+  - Write unit tests including row-boundary stops
+  - _Requirements: REQ-16.1, REQ-21_
+  - _Complexity: S_
   - _Files: src/parser/v2/lexer/TokenStream.res_
 
 - [ ] 12. Write Lexer integration tests
-  - Test tokenization of complete wireframe source
-  - Test Unicode text tokenization (Korean, Japanese, emoji)
-  - Test mixed content (ASCII + Unicode)
+  - Test tokenization + GridIndex of complete wireframe sources
+  - Test Unicode text tokenization (Korean, Japanese, emoji including ZWJ sequences)
+  - Test mixed content (ASCII + Unicode + tabs)
   - Test line ending normalization (LF, CRLF)
-  - Test tab handling (4 spaces)
-  - Test position tracking accuracy
-  - _Requirements: REQ-16, REQ-22_
+  - Test tab-stop handling (verify the visual column matches `UnicodeUtils.visualWidth`)
+  - Test GridIndex `charAt` returns the right grapheme at wide-character columns
+  - _Requirements: REQ-19, REQ-22_
   - _Complexity: M_
   - _Files: src/parser/v2/__tests__/lexer/Lexer_integration_test.res_
 
@@ -215,55 +257,54 @@ This implementation plan provides a series of discrete, manageable coding steps 
 ## Phase 3: Core Parser Infrastructure
 
 - [ ] 13. Implement Parse Context
-  - Create `ParseContext.t` record with blockType, blockId, props, currentContainer, errors, warnings
+  - Create `ParseContext.t` record with `blockType`, `blockId`, `props`, `currentContainer`, `errors`, `warnings`, **`containerDepth: int`**, **`heuristics: Heuristics.t`**, **`gridIndex: GridIndex.t`**
   - Define `blockType` variant (Scene, Component)
   - Implement `make` factory function
-  - Implement `addError`, `addWarning`, `setCurrentContainer` functions
+  - Implement `addError`, `addWarning(~ruleId=?)`, `setCurrentContainer`
+  - Implement `enterContainer / exitContainer` adjusting depth and emitting `MaxDepthExceeded` when needed
   - Implement `isInComponent` helper for prop placeholder validation
-  - Write unit tests for context state management
-  - _Requirements: REQ-14.4 (context awareness for PropPlaceholder), REQ-17.2_
+  - Write unit tests for context state management, depth tracking, ruleId-aware warnings
+  - _Requirements: REQ-14.4, REQ-17.2, REQ-18.7, REQ-23.2_
   - _Complexity: M_
   - _Files: src/parser/v2/parser/ParseContext.res, src/parser/v2/__tests__/parser/ParseContext_test.res_
 
 - [ ] 14. Implement Element Parser interface
-  - Define `V2ElementParser.parseResult` type as `option<V2Types.astNode>`
-  - Define `V2ElementParser.t` record type with elementType, priority, canParse, parse fields
-  - Implement `make` factory function
-  - Implement `getPriority`, `getElementType` getters
-  - Write unit tests for interface compliance
-  - _Requirements: REQ-20.1_
+  - Define `V2ElementParser.parseResult` as `option<V2Types.astNode>`
+  - Define `V2ElementParser.t` record: `elementType`, `priority`, `canParse: TokenStream.t => bool`, `parse: (ParseContext.t, TokenStream.t) => parseResult`
+  - **Contract documented in module doc-comment**: `canParse` must use `save/restore` for any probing that would advance the cursor; must never advance on `false` return
+  - Implement `make` factory, `getPriority`, `getElementType` getters
+  - Write unit tests verifying the `canParse` cursor invariant
+  - _Requirements: REQ-16.1, REQ-16.2, REQ-20.1_
   - _Complexity: S_
   - _Files: src/parser/v2/elements/V2ElementParser.res, src/parser/v2/__tests__/elements/V2ElementParser_test.res_
 
-- [ ] 15. Implement Priority Matcher
-  - Create `Priority` module with all 16 priority constants (115 for String down to 1 for Text)
-  - Create `PriorityMatcher.t` type with registry reference
-  - Implement `make` from parser registry
-  - Implement `match_` to find highest-priority matching parser
-  - Implement `getParsersInOrder` returning sorted parser list
-  - Write unit tests for priority ordering
-  - _Requirements: REQ-16.1, REQ-16.2_
-  - _Complexity: M_
-  - _Files: src/parser/v2/parser/PriorityMatcher.res, src/parser/v2/__tests__/parser/PriorityMatcher_test.res_
+- [ ] 15. Implement Priority constants module
+  - Create `Priority.res` with all 16 constants as named `let` bindings (115 for String down to 1 for Text)
+  - Document that priority defines **trial order only**; disambiguation lives in each parser's `canParse`
+  - Write unit tests that lock the numeric values (regression guard for accidental reordering)
+  - _Requirements: REQ-16.1, REQ-16.2, REQ-16.3_
+  - _Complexity: S_
+  - _Files: src/parser/v2/parser/Priority.res, src/parser/v2/__tests__/parser/Priority_test.res_
 
-- [ ] 16. Implement Element Parser Registry
-  - Create `V2ParserRegistry.t` type with mutable parsers array
-  - Implement `make`, `register` (auto-sort by priority), `unregister` functions
-  - Implement `getParsersByPriority` returning sorted array
-  - Implement `tryParse` attempting all parsers in priority order
-  - Implement `makeDefault` (placeholder, to be populated in Phase 4)
-  - Write unit tests for registry operations
-  - _Requirements: REQ-20.1, REQ-20.2_
+- [ ] 16. Implement Element Parser Registry (owns priority dispatch)
+  - Create `V2ParserRegistry.t` (opaque) wrapping a priority-sorted parsers list
+  - Implement `make`, `makeDefault` (Phase 4 populates), `register` (auto-sorts), `unregister`
+  - Implement `parsers(t) → array<V2ElementParser.t>` for tests/debugging
+  - Implement `tryParse(t, ctx, stream) → option<V2Types.astNode>`: walks parsers in descending priority; for each, calls `canParse`; on the first `true`, dispatches `parse` and returns its result
+  - **No separate PriorityMatcher**: trial order lives here; disambiguation lives in parser `canParse` (REQ-16.2)
+  - Write unit tests covering: descending-priority traversal, first-match-wins, fallback to None when no parser claims the position
+  - _Requirements: REQ-16.1, REQ-16.2, REQ-20.1, REQ-20.2_
   - _Complexity: M_
   - _Files: src/parser/v2/elements/V2ParserRegistry.res, src/parser/v2/__tests__/elements/V2ParserRegistry_test.res_
 
 - [ ] 17. Implement Block Parser
   - [ ] 17.1 Create block detection logic
     - Implement `detectBlockType` scanning for `@scene:` or `@component:`
-    - Return MissingBlockDeclaration error if no block found
-    - Write unit tests for block detection
-    - _Requirements: REQ-1.1, REQ-1.5, REQ-1.7_
-    - _Complexity: S_
+    - Emit `MissingBlockDeclaration` if no block found
+    - Emit `NestedBlockDeclaration` if a second `@scene:`/`@component:` appears inside an active block; close the active block and start a new top-level block (REQ-18.6)
+    - Write unit tests for block detection and nested-block recovery
+    - _Requirements: REQ-1.1, REQ-1.5, REQ-1.7, REQ-18.6_
+    - _Complexity: M_
     - _Files: src/parser/v2/parser/BlockParser.res_
 
   - [ ] 17.2 Implement Scene block parsing
@@ -275,20 +316,28 @@ This implementation plan provides a series of discrete, manageable coding steps 
     - _Complexity: M_
     - _Files: src/parser/v2/parser/BlockParser.res, src/parser/v2/__tests__/parser/BlockParser_test.res_
 
-  - [ ] 17.3 Implement Component block parsing
+  - [ ] 17.3 Implement Component block parsing and props parser (Algorithm 5)
     - Parse `@component:` slug extraction
-    - Parse `@props:` with comma-separated list and `?` optional markers
-    - Create `propDefinition` objects
-    - Write unit tests for Component parsing
+    - Implement props parser supporting **all four forms** per design.md → Algorithm 5:
+      - `name` → required, no default
+      - `name?` → optional, no default
+      - `name=value` → required, with default
+      - `name?=value` → optional, with default
+      - `"quoted name"=v` → name with spaces (quoted form preserves verbatim)
+    - Strip whitespace around commas and `=`
+    - Emit `DuplicatePropName(name)` warning on duplicates; last occurrence wins
+    - Write unit tests covering each form, whitespace tolerance, quoted names, duplicates
     - _Requirements: REQ-1.5, REQ-1.6_
     - _Complexity: M_
     - _Files: src/parser/v2/parser/BlockParser.res_
 
   - [ ] 17.4 Implement content parsing delegation
-    - Implement `parseContent` delegating to element parsers via PriorityMatcher
-    - Wire up LayoutInferrer after content parsing
-    - Write integration tests for full block parsing
-    - _Requirements: REQ-16, REQ-15_
+    - Implement `parseContent` delegating to `V2ParserRegistry.tryParse`
+    - Fall back to TextParser when `tryParse` returns None
+    - Run `LayoutInferrer.inferLayout` on the assembled children before wrapping the block
+    - Run `Validator.validate` on the assembled block
+    - Write integration tests asserting children appear exactly once and layout groups address them by index range
+    - _Requirements: REQ-16, REQ-15, REQ-18.4_
     - _Complexity: M_
     - _Files: src/parser/v2/parser/BlockParser.res_
 
@@ -323,17 +372,19 @@ This implementation plan provides a series of discrete, manageable coding steps 
     - _Complexity: S_
     - _Files: src/parser/v2/elements/StringParser.res_
 
-  - [ ] 18.4 Add PropPlaceholder interpolation in strings
-    - Detect `${...}` patterns within string content
-    - Parse embedded PropPlaceholder, add to interpolations array
-    - Write unit tests for interpolated strings
-    - _Requirements: REQ-12.3_
+  - [ ] 18.4 Add PropPlaceholder + Emoji interpolation in strings
+    - Detect `${...}` patterns within string content → push `PropRef(propPlaceholderNode)` to interpolations
+    - Detect `:name:` patterns within string content → push `EmojiRef(emojiNode)` to interpolations (uses `EmojiRegistry.lookup`)
+    - All other content between interpolations is `Literal(string)` segments
+    - Write unit tests for: prop-only, emoji-only, mixed prop+emoji, unknown shortcode inside string (emits `UnknownEmoji` warning, falls back to literal)
+    - _Requirements: REQ-12.3, REQ-13.1, REQ-13.2_
     - _Complexity: M_
     - _Files: src/parser/v2/elements/StringParser.res_
 
   - [ ] 18.5 Add special character preservation
-    - Ensure `[ ]`, `< >`, etc. are treated as literal text inside strings
-    - Write unit tests verifying no nested parsing
+    - Ensure bracket/angle/paren element syntax (`[ ]`, `< >`, `( )`, `+--+`) is treated as literal text inside strings
+    - Only `${...}` and `:name:` are interpolated; everything else is a literal segment
+    - Write unit tests verifying no nested element parsing fires inside `"..."`
     - _Requirements: REQ-12.2_
     - _Complexity: S_
     - _Files: src/parser/v2/elements/StringParser.res_
@@ -539,70 +590,73 @@ This implementation plan provides a series of discrete, manageable coding steps 
     - _Complexity: S_
     - _Files: src/parser/v2/elements/DividerParser.res_
 
-- [ ] 28. Implement Container Parser (Priority 10)
-  - [ ] 28.1 Create Container border detection
-    - Implement `ContainerParser` with `canParse` checking for `+--` or `+#` patterns
-    - Parse top border: `+--name--+`, `+--#id--+`, `+----------+`
-    - Extract name and/or format 1 ID from border
-    - Define `containerBorderInfo` record with name, id, width, position
+- [ ] 28. Implement Container Parser (Priority 10) — grid-based, Algorithm 1
+  - [ ] 28.1 Top-border detection via GridIndex (Algorithm 1, steps 1-2)
+    - Implement `canParse` checking for `Plus + Dashes(n) + ... + Plus` on the current row
+    - Extract candidate left column `Lc`, right column `Rc`, name, and Format 1 ID
+    - Define `containerBorderInfo = { name, format1Id, Lc, Rc, position }`
     - Set priority = 10
-    - Write unit tests for border detection
+    - Write unit tests for top-border variations (`+--name--+`, `+--#id--+`, `+----+`, `+#id+`)
     - _Requirements: REQ-2.1, REQ-3.1_
     - _Complexity: M_
     - _Files: src/parser/v2/elements/ContainerParser.res, src/parser/v2/__tests__/elements/ContainerParser_test.res_
 
-  - [ ] 28.2 Implement Container content parsing
-    - Parse lines starting with `|` and ending with `|`
-    - Detect and extract format 2 ID (`| #id |` as sole line content)
-    - Handle ID precedence: format 1 > format 2
-    - Recursively parse nested content using `V2ParserRegistry`
-    - Write unit tests for content parsing
-    - _Requirements: REQ-2.2, REQ-3.2, REQ-3.4, REQ-3.6_
+  - [ ] 28.2 Vertical wall walk + bottom-border match (Algorithm 1, steps 3-5)
+    - Walk downward from `topRow + 1`. For each row, use `GridIndex.charAt(row, Lc)` and `charAt(row, Rc)`:
+      - Both `|` (within `heuristics.containerColumnTolerance`) → body row
+      - Both `+` with a dash run between → candidate bottom border
+      - Otherwise → `UnclosedContainer` + invoke `errorRecovery.containerSync`
+    - On misaligned wall (within tolerance), emit `MisalignedContainerWall` warning with `ruleId: container.wallAlignment`
+    - On bottom-border width mismatch beyond `containerWidthTolerance`, emit `InconsistentContainerWidth` with `ruleId: container.widthConsistency`
+    - Compute `bounds = { x: Lc, y: topRow, width: Rc-Lc+1, height: bottomRow-topRow+1 }`
+    - Write unit tests for: aligned walls, ±1 drift (warning), 2+ drift (error/recovery), missing bottom border
+    - _Requirements: REQ-2.3, REQ-2.5, REQ-23.1, REQ-23.2_
     - _Complexity: L_
     - _Files: src/parser/v2/elements/ContainerParser.res_
 
-  - [ ] 28.3 Implement nested Container parsing
-    - Detect nested `+--+` patterns within content
-    - Recursively call `ContainerParser.parse` for nested containers
-    - Add nested containers to children array
-    - Write unit tests for nested containers
-    - _Requirements: REQ-2.4_
+  - [ ] 28.3 Parse inner content (re-tokenize + re-dispatch)
+    - For body rows, slice the inner region `(topRow+1..bottomRow-1, Lc+1..Rc-1)` and re-parse using the registry
+    - Increment `ParseContext.containerDepth` before descending; decrement after
+    - If `containerDepth + 1 > maxDepth`, emit `MaxDepthExceeded`, produce empty container, set `containsErrorRecovery=true`, continue siblings (REQ-18.7)
+    - Detect nested top-border patterns within body rows → recurse into 28.1
+    - Write unit tests for 1-, 2-, 3-level nesting and maxDepth boundary
+    - _Requirements: REQ-2.2, REQ-2.4, REQ-18.7_
+    - _Complexity: L_
+    - _Files: src/parser/v2/elements/ContainerParser.res_
+
+  - [ ] 28.4 Container ID resolution (Algorithm 2)
+    - Collect `format1Id` (from border) and `format2Ids` (array of standalone `| #id |` lines anywhere in body)
+    - Apply precedence:
+      - Both present → use `format1Id`; demote Format 2 lines to TextNode children; no error
+      - Only Format 2 with 1 candidate → use it
+      - Only Format 2 with 2+ candidates → `MultipleIdDeclarations`, attach first, demote rest, set `containsErrorRecovery=true`
+    - Detect `| #id text |` (mixed) during line parse → `InvalidIdFormat`, treat whole line as text
+    - Write unit tests covering each branch of Algorithm 2
+    - _Requirements: REQ-3.2, REQ-3.3, REQ-3.4, REQ-3.5, REQ-3.6_
     - _Complexity: M_
     - _Files: src/parser/v2/elements/ContainerParser.res_
 
-  - [ ] 28.4 Implement bottom border and bounds
-    - Parse `+--------+` pattern as container end
-    - Calculate container bounds (x, y, width, height)
-    - Write unit tests for complete container parsing
-    - _Requirements: REQ-2.3_
-    - _Complexity: S_
-    - _Files: src/parser/v2/elements/ContainerParser.res_
-
-  - [ ] 28.5 Add Container error handling
-    - Generate UnclosedContainer error when bottom border missing
-    - Generate InvalidIdFormat error for `| #id text |` patterns
-    - Generate MultipleIdDeclarations error for duplicate IDs
-    - Write unit tests for all error cases
-    - _Requirements: REQ-2.5, REQ-3.3, REQ-3.5_
-    - _Complexity: M_
-    - _Files: src/parser/v2/elements/ContainerParser.res_
-
-  - [ ] 28.6 Handle nameless containers
-    - Parse `+----------+` (no name) as Container with name=None
+  - [ ] 28.5 Handle nameless containers
+    - Parse `+----------+` (no name, no ID) as Container with `name=None`, `id=None`
     - Write unit tests for nameless containers
     - _Requirements: REQ-2.6_
     - _Complexity: S_
     - _Files: src/parser/v2/elements/ContainerParser.res_
 
-- [ ] 29. Implement Text Parser (Priority 1 - Fallback)
-  - Implement `TextParser` as fallback parser with `canParse` always returning true
-  - Parse any unmatched text as `TextNode`
-  - Extract content from remaining tokens until newline
-  - Calculate alignment (Left, Center, Right) based on position within container
-  - Create `TextNode` with content, align properties
+- [ ] 29. Implement Text Parser (Priority 1 - Fallback) — Algorithm 4 alignment
+  - Implement `TextParser` as fallback (`canParse` always returns `true`)
+  - Extract content from current cursor up to newline
+  - Implement alignment detection per design.md → Algorithm 4:
+    1. Compute `leftPad` (inner-left → text start) and `rightPad` (text end → inner-right) within enclosing Container's bounds
+    2. `leftPad < 2 && rightPad < 2` → `Left`
+    3. `rightPad/W ≤ heuristics.rightAlignThreshold && leftPad > rightPad*2` → `Right`
+    4. `|leftPad - rightPad|/W ≤ heuristics.centerSymmetryThreshold` → `Center`
+    5. Otherwise → `Left`
+  - When step 3 or 4 fires, record a debug breadcrumb tagged with `ruleId: text.right` or `text.center`
+  - Text outside any Container (no bounds) defaults to `Left` and never invokes the algorithm
   - Set priority = 1
-  - Write unit tests for text parsing and alignment
-  - _Requirements: REQ-4.1, REQ-4.2, REQ-4.3_
+  - Write unit tests including boundary cases for each threshold (just-inside / exact / just-outside)
+  - _Requirements: REQ-4.1, REQ-4.2, REQ-4.3, REQ-23.6_
   - _Complexity: M_
   - _Files: src/parser/v2/elements/TextParser.res, src/parser/v2/__tests__/elements/TextParser_test.res_
 
@@ -610,69 +664,67 @@ This implementation plan provides a series of discrete, manageable coding steps 
 
 ## Phase 5: Layout & Validation
 
-- [ ] 30. Implement Layout Inferrer
-  - [ ] 30.1 Create element grouping by line
-    - Implement `LayoutInferrer` module
-    - Group elements by their start line number
-    - Elements on same line = row, different lines = column
-    - Define `elementGroup` record with direction, children, startLine
-    - Write unit tests for basic grouping
-    - _Requirements: REQ-15.1, REQ-15.2_
+- [ ] 30. Implement Layout Inferrer (no children duplication)
+  - [ ] 30.1 Group children by row, using index ranges
+    - Implement `inferLayout(~children, ~containerBounds=?) → layoutInfo`
+    - Walk `children` left-to-right; group consecutive children whose start `row` matches into one `elementGroup { direction, start, end_, startRow }`
+    - Use the half-open index range `[start, end_)` — DO NOT copy child nodes into the group
+    - For multi-line Containers, the Container's `bounds.y` is its start row (REQ-15.3)
+    - Write unit tests asserting: zero duplication between `parent.children` and `group` references; direction correctness; correct boundary at row changes
+    - _Requirements: REQ-15.1, REQ-15.2, REQ-15.3, REQ-15.5_
     - _Complexity: M_
     - _Files: src/parser/v2/layout/LayoutInferrer.res, src/parser/v2/__tests__/layout/LayoutInferrer_test.res_
 
-  - [ ] 30.2 Handle multiline Container layout
-    - Use Container start line (`+--`) for layout calculation
-    - Ignore element spacing for layout decisions
-    - Write unit tests for multiline element layout
-    - _Requirements: REQ-15.3, REQ-15.4_
+  - [ ] 30.2 Determine overall direction and distribution
+    - Compute overall `direction`: all groups Row → Row, all single-element groups → Column, else Mixed
+    - Compute `distribution: option<distribution>` for Row-style groups using container bounds:
+      - Single child → `None`
+      - Equal gaps between children → `Equal`
+      - Space at both ends ≈ inter-child space → `SpaceAround`
+      - Large gap between children, small at ends → `SpaceBetween`
+      - All children at the left → `Start`; right → `End`; centered as a unit → `Center`
+    - Distribution is `None` if `containerBounds` is `None` (no width to compare against)
+    - Write unit tests for each distribution case + None fallback
+    - _Requirements: REQ-15, REQ-15.4, REQ-18.5_
     - _Complexity: M_
     - _Files: src/parser/v2/layout/LayoutInferrer.res_
 
-  - [ ] 30.3 Determine layout direction
-    - Calculate overall direction: Row, Column, or Mixed
-    - Create `layoutInfo` record with direction and element groups
-    - Implement `calculateDistribution` for container children spacing
-    - Write unit tests for direction detection
-    - _Requirements: REQ-15, REQ-18.5_
-    - _Complexity: S_
-    - _Files: src/parser/v2/layout/LayoutInferrer.res_
-
-- [ ] 31. Implement Radio Button Grouping
-  - Implement `groupByProximity` for vertical consecutive radios
-  - Implement `groupByLine` for horizontal same-line radios
-  - Implement `groupByContainer` for radios in same container
-  - Implement `assignGroupIds` generating unique group IDs
-  - Update radioNode.group field with assigned group ID
-  - Write unit tests for all grouping scenarios
-  - _Requirements: REQ-10.4, REQ-10.5, REQ-10.6_
+- [ ] 31. Implement Radio Button Grouping (Algorithm 3)
+  - Implement `assignGroups(radios, ~parentBounds=?) → array<radioNode>` per design.md Algorithm 3:
+    1. Build graph: edges between radios that satisfy horizontal adjacency (same row, col distance ≤ `heuristics.radioHorizontalGap`, no non-whitespace token between) OR vertical adjacency (row distance ≤ `radioMaxBlankRows + 1`, col distance ≤ `radioVerticalColumnTolerance`, no element between on intervening columns)
+    2. Connected components → groups
+    3. Single component inside a named Container → use the container's id (or `radio-group-<containerSlug>-1`)
+    4. Multiple components in the same Container with no visual separator → emit `RadioGroupAmbiguous` (`ruleId: radioGrouping.container`)
+    5. Multi-component group IDs: `<parentSlug>-group-<n>` in document order
+  - Update `radioNode.group` field; return rebuilt array (immutable; parent rebuilt by caller)
+  - Write unit tests covering: horizontal-only, vertical-only, mixed, container-wide, ambiguous (warning), boundary cases for each threshold
+  - _Requirements: REQ-10.4, REQ-10.5, REQ-10.6, REQ-23.1, REQ-23.4_
   - _Complexity: M_
   - _Files: src/parser/v2/layout/RadioGrouper.res, src/parser/v2/__tests__/layout/RadioGrouper_test.res_
 
-- [ ] 32. Implement Validator
-  - [ ] 32.1 Create validation framework
-    - Implement `Validator` module
-    - Define `validationResult` record with valid, errors, warnings
-    - Implement `validate` function accepting AST and context
-    - Collect and return all errors and warnings
-    - Write unit tests for validation framework
+- [ ] 32. Implement Validator (cross-cutting checks only)
+  - [ ] 32.1 Implement validation entry point
+    - Implement `validate(blockNode) → (array<parseError>, array<parseWarning>)` — returns NEW errors/warnings (does not mutate the AST)
+    - Element parsers' local errors (UnclosedInput, MissingLabel, etc.) are already on `ParseContext` from parse time; the Validator does NOT re-emit them
     - _Requirements: REQ-17.1, REQ-17.2_
     - _Complexity: M_
     - _Files: src/parser/v2/validator/Validator.res, src/parser/v2/__tests__/validator/Validator_test.res_
 
-  - [ ] 32.2 Implement error recovery
-    - Mark problematic elements as ErrorNode
-    - Continue parsing after recoverable errors
-    - Collect all errors in final result
-    - Write unit tests for error recovery scenarios
-    - _Requirements: REQ-21.1, REQ-21.2_
+  - [ ] 32.2 Implement cross-cutting checks
+    - **ID uniqueness**: walk all `ContainerNode` ids within the block → `DuplicateContainerId(id)` on collision
+    - **Button/Link slug collision**: detect identical auto-slugs within the block (warning)
+    - **Prop reference validity**: for every `PropPlaceholder` inside a `@component`, verify the name appears in `componentNode.props` → `UnknownPropReference(name)` otherwise
+    - **Radio group selection**: each group with 2+ `selected=true` radios → `MultipleRadiosSelected(group)`
+    - **Near-miss detection**: walk text nodes; for any that look one-token-edit away from a known pattern, emit the corresponding `LooksLikeButton/Input/Checkbox/Radio` (`ruleId: nearMissPatterns`)
+    - Write unit tests for each check, including "no-op when input is clean"
+    - _Requirements: REQ-16.4, REQ-17, REQ-21.1, REQ-21.2_
     - _Complexity: L_
     - _Files: src/parser/v2/validator/Validator.res_
 
   - [ ] 32.3 Handle fatal errors
-    - Detect unrecoverable errors (e.g., missing block declaration)
-    - Stop parsing with clear error message
-    - Write unit tests for fatal error handling
+    - Detect unrecoverable errors (`MissingBlockDeclaration`) before validation runs
+    - In strict mode (`parseOptions.strict=true`), promote `recoverable` errors to fatal
+    - Write unit tests for fatal-error halting
     - _Requirements: REQ-21.3_
     - _Complexity: S_
     - _Files: src/parser/v2/validator/Validator.res_
@@ -814,33 +866,43 @@ This implementation plan provides a series of discrete, manageable coding steps 
   - _Complexity: M_
   - _Files: src/parser/v2/__tests__/integration/Unicode_test.res_
 
-- [ ] 39. Implement performance tests
+- [ ] 39. Implement performance tests (measurement contract per REQ-19.4)
   - [ ] 39.1 Create performance benchmarks
-    - Create benchmark for 100-line file (target: < 50ms)
-    - Create benchmark for 1000-line file (target: < 500ms)
-    - Write assertions for performance thresholds
-    - _Requirements: REQ-19.1, REQ-19.2_
+    - Set up Vitest `bench` (or dedicated `__tests__/perf/` harness) using best-of-5 wall time
+    - Bench for 100-line file (target: < 50ms on reference platform)
+    - Bench for 1000-line file (target: < 500ms on reference platform)
+    - Document reference platform (M-series or x86-64 ≥ 2.5 GHz, Node ≥ 20, single-threaded) in test header
+    - If CI hardware can't meet baseline, override threshold in `vitest.config` with a comment linking to REQ-19.4 (never silently relax)
+    - _Requirements: REQ-19.1, REQ-19.2, REQ-19.4_
     - _Complexity: M_
-    - _Files: src/parser/v2/__tests__/performance/Performance_test.res_
+    - _Files: src/parser/v2/__tests__/perf/Performance_test.res, vitest.config.*_
 
   - [ ] 39.2 Memory usage tests
-    - Profile memory usage during parsing
-    - Assert memory < 10x input size
+    - Measure `process.memoryUsage().heapUsed` delta before/after a single parse run
+    - Assert peak delta < 10× input byte size
     - _Requirements: REQ-19.3_
     - _Complexity: M_
-    - _Files: src/parser/v2/__tests__/performance/Memory_test.res_
+    - _Files: src/parser/v2/__tests__/perf/Memory_test.res_
 
-- [ ] 40. Implement performance optimizations
-  - Implement lazy tokenization if beneficial
-  - Implement look-ahead caching in PriorityMatcher
-  - Optimize string operations in TokenStream
-  - Review and optimize recursive container parsing
-  - Re-run performance benchmarks
-  - Document optimizations applied
-  - Verify all existing tests still pass
+- [ ] 40. Implement performance optimizations (deliberate, measured)
+  - Eager tokenization is the design baseline; **lazy tokenization is rejected** (design.md → Performance Considerations)
+  - GridIndex uses per-row sparse representation; verify pure-whitespace rows take O(1) memory
+  - Optimize tight loops in `Lexer.tokenize` and `GridIndex.make` only after benchmarks show a hotspot
+  - Avoid micro-optimizations that obscure the parse pipeline; every optimization needs a before/after benchmark in the PR
+  - Verify all existing tests still pass; document each optimization in the PR description
   - _Requirements: REQ-19_
   - _Complexity: M_
   - _Files: Various parser modules_
+
+- [ ] 40.5 Implement Heuristics regression test suite
+  - Create `src/parser/v2/__tests__/heuristics/` directory
+  - For each named heuristic in the Heuristics Catalog, add boundary fixtures (just-inside / exact / just-outside)
+  - Add golden fixtures for tricky hand-drawn inputs (off-by-one walls, misaligned bottom borders, radios with mixed grouping cues)
+  - Add conflict fixtures designed to make two heuristics disagree, asserting the documented resolution
+  - Lock the ruleId emitted by each fixture (regression test for ruleId stability)
+  - _Requirements: REQ-23.4, REQ-23.5, REQ-23.6_
+  - _Complexity: L_
+  - _Files: src/parser/v2/__tests__/heuristics/*_
 
 - [ ] 41. Write extensibility examples
   - Example: Custom element parser registration
@@ -886,14 +948,15 @@ This implementation plan provides a series of discrete, manageable coding steps 
 | REQ-12 String Literal | 2.3, 18.1-18.5, 6.4 |
 | REQ-13 Emoji | 2.3, 20.1-20.3 |
 | REQ-14 PropPlaceholder | 2.3, 19.1-19.4 |
-| REQ-15 Implicit Layout | 2.4, 30.1-30.3 |
-| REQ-16 Priority System | 15, 36.2, 17.4 |
-| REQ-17 Error Handling | 3.1, 3.2, 32.1, 37 |
-| REQ-18 AST Output | 2.1-2.4, 34.1-34.3 |
+| REQ-15 Implicit Layout | 2.4, 30.1, 30.2 |
+| REQ-16 Priority System | 15, 16, 17.4, 36.2 |
+| REQ-17 Error Handling | 3.1, 3.2, 13, 32.1-32.2, 37 |
+| REQ-18 AST Output | 2.1-2.4, 17.1, 28.3, 34.1-34.3 |
 | REQ-19 Performance | 39.1, 39.2, 40 |
 | REQ-20 Extensibility | 1, 16, 20.1, 35, 41 |
-| REQ-21 Error Recovery | 2.3, 32.1-32.3, 36.3 |
+| REQ-21 Error Recovery | 28.2, 32.2, 32.3, 36.3 |
 | REQ-22 Unicode | 6.1, 6.3, 7, 38 |
+| REQ-23 Heuristics & Tolerances | 6.5, 13, 28.2, 29, 31, 32.2, 40.5 |
 
 ---
 
@@ -915,21 +978,22 @@ flowchart TD
         T6_2[6.2 Slug utils]
         T6_3[6.3 Unicode utils]
         T6_4[6.4 Escape utils]
+        T6_5[6.5 Heuristics]
     end
 
     subgraph Phase2["Phase 2: Lexer"]
         T7[7. Scanner]
         T8[8. Token Stream]
         T9[9. Lexer]
-        T10[10. Line utilities]
-        T11[11. Pattern detection]
+        T10[10. GridIndex]
+        T11[11. Pattern helpers]
         T12[12. Lexer integration tests]
     end
 
     subgraph Phase3["Phase 3: Parser Infrastructure"]
         T13[13. Parse Context]
         T14[14. Parser interface]
-        T15[15. Priority Matcher]
+        T15[15. Priority constants]
         T16[16. Parser Registry]
         T17[17. Block Parser]
     end
@@ -984,6 +1048,7 @@ flowchart TD
     T1 --> T6_2
     T1 --> T6_3
     T1 --> T6_4
+    T1 --> T6_5
 
     %% Phase 2 dependencies
     T4 --> T7
@@ -992,18 +1057,23 @@ flowchart TD
     T4 --> T8
     T7 --> T9
     T8 --> T9
+    T4 --> T10
     T9 --> T10
-    T9 --> T11
+    T8 --> T11
+    T10 --> T12
     T11 --> T12
 
     %% Phase 3 dependencies
     T3_2 --> T13
     T2_3 --> T13
+    T6_5 --> T13
+    T10 --> T13
     T2_1 --> T14
-    T14 --> T15
     T14 --> T16
+    T15 --> T16
     T9 --> T17
     T13 --> T17
+    T16 --> T17
 
     %% Phase 4 dependencies (all need infrastructure)
     T15 --> T18
@@ -1105,6 +1175,32 @@ flowchart TD
 
 ---
 
-**Version**: 1.1.0
-**Last Updated**: 2025-12-27
+**Version**: 1.2.0
+**Last Updated**: 2026-06-08
 **Status**: Draft
+
+---
+
+## Changelog
+
+- **1.2.0 (2026-06-08)** — Aligned with design.md v1.2.0 and requirements.md v1.1.0.
+  - Task 1: validator/ dir, GridIndex.res, Heuristics.res added to directory structure.
+  - Task 2.1: `position` fields are now `row`, `col`, `offset` (0-based).
+  - Task 2.3: `layoutInfo` uses index ranges (no children duplication); `interpolationContent` includes `EmojiRef`.
+  - Task 3.1/3.2: added `NestedBlockDeclaration`, `MaxDepthExceeded` errors; 11 new warning codes (heuristic + cross-cutting); `parseWarning.ruleId` field.
+  - Task 4: physical `tokenKind` variant (Plus, Pipe, Dashes(n), etc.) instead of generic `Punctuation`.
+  - Task 5: `parseOptions.heuristics` override field.
+  - Task 6.1/6.3: visual-width math centralized in UnicodeUtils; tab-stop math (not "4 spaces").
+  - **Task 6.5 (new)**: `Heuristics` module with all tolerance defaults and rule-ID constants.
+  - **Task 10 reframed**: was "Lexer line utilities" — now `GridIndex` (2D random access).
+  - Task 8: `TokenStream.save/restore` formalized; `canParse` cursor contract documented.
+  - Task 15: was "Priority Matcher" — now just the `Priority` constants module. Dispatch lives in Task 16 (`V2ParserRegistry.tryParse`).
+  - Task 17.1/17.3: nested block detection; full props parser (Algorithm 5: name, name?, name=v, name?=v, "quoted"=v).
+  - Task 18.4: emoji interpolation in strings.
+  - Task 28: rewritten around Algorithms 1 (grid-based container detection) and 2 (ID resolution).
+  - Task 29: alignment per Algorithm 4 with heuristic thresholds.
+  - Task 30/31: layout groups by index range; Radio grouping per Algorithm 3.
+  - Task 32: Validator scoped to cross-cutting checks; per-parser checks remain in parsers.
+  - Task 39/40: lazy tokenization rejected; performance measurement contract per REQ-19.4.
+  - **Task 40.5 (new)**: Heuristics regression test suite with boundary fixtures.
+  - Traceability matrix: added REQ-23; remapped REQ-15/16/17/18/21 to new task IDs.

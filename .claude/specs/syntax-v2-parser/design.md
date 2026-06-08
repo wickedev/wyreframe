@@ -8,13 +8,23 @@ This document defines the architecture and detailed design for the Wyreframe Syn
 
 ### Document Information
 
-- **Version**: 1.1.0
+- **Version**: 1.2.0
 - **Based on Requirements**: .claude/specs/syntax-v2-parser/requirements.md
 - **Based on Spec**: Wyreframe Syntax v2.3 Specification
 - **Implementation Language**: ReScript (with @rescript/core)
 - **Created**: 2025-12-27
-- **Updated**: 2025-12-27
+- **Updated**: 2026-06-08
 - **Status**: Draft
+
+### Design Philosophy
+
+Wyreframe syntax is **2D ASCII art**, not a 1D text language. Two consequences shape this design:
+
+1. **Grid-aware lexer.** Containers (`+--name--+` / `|`), text alignment, side-by-side layout, and radio grouping all depend on column-level alignment between non-adjacent lines. The lexer therefore carries both 1D coordinates (`offset`) and 2D coordinates (`row`, `col`) on every token, and a dedicated `GridIndex` lets parsers look up "what is at column X on row Y" without re-scanning.
+
+2. **Heuristics are first-class.** Users hand-draw wireframes; misaligned by ±1 column, mixed tabs/spaces, slightly-off bottom borders are normal. Rather than hide tolerances inside parser internals, this design exposes them in a single [Heuristics Catalog](#heuristics-catalog) — named, tunable, testable, and traceable from runtime warnings back to a rule ID.
+
+These two commitments — grid-aware tokens and explicit heuristics — should be applied throughout the implementation. When in doubt, prefer making a heuristic visible over hiding it in a `canParse` branch.
 
 ### Design Scope
 
@@ -45,64 +55,35 @@ graph TB
     end
 
     subgraph "Parser Pipeline"
-        LEXER[Lexer<br/>Tokenizer.res]
-        PARSER[Parser<br/>BlockParser.res]
+        LEXER[Lexer<br/>tokens + GridIndex]
+        BLOCK[BlockParser<br/>@scene / @component]
 
-        subgraph "Element Parsers"
-            EP_CONTAINER[ContainerParser.res]
-            EP_TEXT[TextParser.res]
-            EP_BUTTON[ButtonParser.res]
-            EP_LINK[LinkParser.res]
-            EP_INPUT[InputParser.res]
-            EP_SELECT[SelectParser.res]
-            EP_CHECKBOX[CheckboxParser.res]
-            EP_RADIO[RadioParser.res]
-            EP_DIVIDER[DividerParser.res]
-            EP_STRING[StringParser.res]
-            EP_EMOJI[EmojiParser.res]
-            EP_PROP[PropPlaceholderParser.res]
+        subgraph "Per-position dispatch"
+            REGISTRY[V2ParserRegistry.tryParse<br/>priority-ordered canParse]
+            EPS[Element Parsers<br/>Container / Text / Button / Link /<br/>Input / Select / Checkbox / Radio /<br/>Divider / String / Emoji / PropPlaceholder]
+            REGISTRY -.->|first canParse=true| EPS
         end
 
-        LAYOUT[LayoutInferrer.res<br/>Implicit Layout Detection]
-        VALIDATOR[Validator.res<br/>Error Collection]
+        LAYOUT[LayoutInferrer<br/>+ RadioGrouper<br/>per parent.children]
+        VALIDATOR[Validator<br/>cross-cutting checks]
+        HEURISTICS[(Heuristics module<br/>shared by all stages)]
     end
 
     subgraph Output
-        AST[AST<br/>V2Types.res]
-        ERRORS[ParseResult<br/>errors + warnings]
+        AST[AST<br/>V2Types]
+        ERRORS[ParseResult<br/>errors + warnings + ruleIds]
     end
 
     SOURCE --> LEXER
-    LEXER --> PARSER
-    PARSER --> EP_CONTAINER
-    PARSER --> EP_TEXT
-    PARSER --> EP_BUTTON
-    PARSER --> EP_LINK
-    PARSER --> EP_INPUT
-    PARSER --> EP_SELECT
-    PARSER --> EP_CHECKBOX
-    PARSER --> EP_RADIO
-    PARSER --> EP_DIVIDER
-    PARSER --> EP_STRING
-    PARSER --> EP_EMOJI
-    PARSER --> EP_PROP
-
-    EP_CONTAINER --> LAYOUT
-    EP_TEXT --> LAYOUT
-    EP_BUTTON --> LAYOUT
-    EP_LINK --> LAYOUT
-    EP_INPUT --> LAYOUT
-    EP_SELECT --> LAYOUT
-    EP_CHECKBOX --> LAYOUT
-    EP_RADIO --> LAYOUT
-    EP_DIVIDER --> LAYOUT
-    EP_STRING --> LAYOUT
-    EP_EMOJI --> LAYOUT
-    EP_PROP --> LAYOUT
-
+    LEXER --> BLOCK
+    BLOCK --> REGISTRY
+    EPS --> LAYOUT
     LAYOUT --> VALIDATOR
     VALIDATOR --> AST
     VALIDATOR --> ERRORS
+    HEURISTICS -.-> EPS
+    HEURISTICS -.-> LAYOUT
+    HEURISTICS -.-> VALIDATOR
 ```
 
 ### Data Flow Diagram
@@ -122,7 +103,7 @@ flowchart LR
     end
 
     subgraph "Phase 3: Element Parsing"
-        E --> H[PriorityMatcher.res]
+        E --> H[V2ParserRegistry.tryParse]
         F --> H
         H --> I[Element Parsers]
         I --> J[Raw AST Nodes]
@@ -146,13 +127,14 @@ src/parser/v2/
 │   ├── Token.res            # Token type definitions
 │   └── V2Errors.res         # Error/Warning type definitions
 ├── lexer/
-│   ├── Lexer.res            # Lexer main module
-│   ├── Scanner.res          # Character scanner
-│   └── TokenStream.res      # Token stream utilities
+│   ├── Lexer.res            # Eager tokenizer (grid-aware)
+│   ├── Scanner.res          # Character scanner (Unicode-aware)
+│   ├── TokenStream.res      # Cursor over the token array (save/restore)
+│   └── GridIndex.res        # Random-access (row, col) -> token index
 ├── parser/
 │   ├── BlockParser.res      # Block type parser (@scene, @component)
 │   ├── ParseContext.res     # Parse context (scene/component state)
-│   └── PriorityMatcher.res  # Priority-based pattern matching
+│   └── Priority.res         # Priority constants (trial-order)
 ├── elements/
 │   ├── V2ElementParser.res  # Element parser interface
 │   ├── V2ParserRegistry.res # Element parser registry
@@ -169,13 +151,16 @@ src/parser/v2/
 │   ├── EmojiParser.res      # Emoji shortcode parser (:name:)
 │   └── PropPlaceholderParser.res  # PropPlaceholder parser (${prop})
 ├── layout/
-│   ├── LayoutInferrer.res   # Layout inference
-│   └── RadioGrouper.res     # Radio button grouping
+│   ├── LayoutInferrer.res   # Layout inference (per parent.children)
+│   └── RadioGrouper.res     # Radio button grouping (see Algorithm 3)
+├── validator/
+│   └── Validator.res        # Cross-cutting post-parse checks
 ├── utils/
-│   ├── PositionUtils.res    # Line/column tracking utilities
+│   ├── PositionUtils.res    # Row/column tracking utilities
 │   ├── Slugify.res          # Text to slug conversion
-│   ├── UnicodeUtils.res     # Unicode utilities
-│   └── EscapeUtils.res      # Escape sequence handling
+│   ├── UnicodeUtils.res     # Grapheme & visual-width utilities (see Unicode Policy)
+│   ├── EscapeUtils.res      # Escape sequence handling
+│   └── Heuristics.res       # Tunable thresholds (see Heuristics Catalog)
 ├── registry/
 │   ├── EmojiRegistry.res    # Emoji shortcode mappings
 │   └── ElementRegistry.res  # Element parser registration
@@ -194,92 +179,111 @@ src/parser/v2/
 
 ## Component Design
 
-### Component 1: Lexer (Tokenizer)
+### Component 1: Grid-Aware Lexer
 
 **Responsibilities:**
-- Process input text as a character stream
-- Track position information (line, column)
-- Classify basic tokens (identifier, punctuation, whitespace, newline)
-- Correctly handle Unicode characters
+- Eagerly tokenize the source into a flat token array with **both 1D and 2D coordinates** on every token.
+- Build a `GridIndex` mapping `(row, col) → token`, so parsers can ask "what character sits at column X of row Y?" in O(1) without rescanning.
+- Recognize only **physical** lexemes (punctuation runs `+--+`, pipes `|`, brackets `[`/`]`, parens `(`/`)`, angle brackets `<`/`>`, dashes/equals runs, identifiers, strings, whitespace, newlines). Semantic disambiguation belongs to parsers.
+- Correctly count columns under Unicode (see [Unicode Policy](#unicode-policy)).
+
+**Why both coordinates?** A 1D `offset` is convenient for slicing source text and reporting errors; 2D `(row, col)` is required for column-alignment checks (Container borders, side-by-side layout, text alignment). Computing one from the other on the fly is slow and error-prone for ASCII-art content.
 
 **Interfaces:**
 
 ```rescript
 // types/Token.res
 
-/** Token position in source */
+/** Token position in source - carries both 1D and 2D coordinates */
 type position = {
-  line: int,    // 1-based line number
-  column: int,  // 1-based column number (Unicode-aware)
-  offset: int,  // 0-based character offset
+  row: int,       // 0-based row (line index)
+  col: int,       // 0-based visual column (Unicode-aware; wide chars count 2)
+  offset: int,    // 0-based byte/character offset (Unicode-aware)
 }
 
-/** Token types */
-type tokenType =
-  | Identifier
-  | Punctuation
-  | Whitespace
+/** Physical token kinds — purely lexical, no semantic intent */
+type tokenKind =
+  | Identifier           // alphanumeric run
+  | Dashes(int)          // `-` run with length
+  | Equals(int)          // `=` run with length
+  | Plus                 // `+`
+  | Pipe                 // `|`
+  | LBracket | RBracket  // `[` `]`
+  | LParen   | RParen    // `(` `)`
+  | LAngle   | RAngle    // `<` `>`
+  | Underscores(int)     // `_` run with length
+  | Colon                // `:`
+  | Hash                 // `#`
+  | Dollar               // `$`
+  | LBrace   | RBrace    // `{` `}` (for ${...})
+  | Asterisk             // `*`
+  | Quote                // `"`
+  | At                   // `@`
+  | Comma                // `,`
+  | QuestionMark         // `?`
+  | Whitespace(int)      // run of spaces/tabs with visual width
   | Newline
-  | String
-  | Number
+  | Other(string)        // anything else (literal text)
   | EOF
 
-/** Token record */
 type t = {
-  tokenType: tokenType,
-  value: string,
-  position: position,
+  kind: tokenKind,
+  text: string,           // verbatim source slice
+  position: position,     // start position
+  endPosition: position,  // end position (exclusive)
 }
+```
 
+```rescript
 // lexer/Lexer.res
 
-/** Lexer module type */
-type t = {
-  source: string,
-  mutable current: int,
-  mutable line: int,
-  mutable column: int,
-}
-
-/** Create a new lexer from source text */
-let make: string => t
-
-/** Tokenize entire source */
-let tokenize: t => TokenStream.t
-
-/** Peek at current token without consuming */
-let peek: t => Token.t
-
-/** Consume and return current token */
-let next: t => Token.t
-
-/** Look ahead n tokens */
-let lookAhead: (t, int) => Token.t
-
-/** Get current position */
-let getPosition: t => Token.position
+/** Tokenize the entire source eagerly. Returns the full token array.
+    Lazy tokenization is rejected — see Performance Considerations. */
+let tokenize: (~tabSize: int=?, string) => array<Token.t>
 ```
 
 ```rescript
 // lexer/TokenStream.res
 
-/** Token stream type */
-type t = {
-  tokens: array<Token.t>,
-  mutable current: int,
-}
+/** Cursor over a pre-tokenized array. Mutability is contained to a single cursor. */
+type t
 
 let make: array<Token.t> => t
 let peek: t => Token.t
-let next: t => Token.t
-let lookAhead: (t, int) => Token.t
-let rewind: (t, int) => unit
+let peekAt: (t, int) => Token.t       // peek(N tokens ahead), 0 = current
+let next: t => Token.t                 // advance and return
+let save: t => int                     // snapshot cursor
+let restore: (t, int) => unit          // rollback to snapshot (used by parsers' canParse)
 let isAtEnd: t => bool
+let position: t => Token.position
 ```
+
+```rescript
+// lexer/GridIndex.res
+
+/** Random-access index over the tokenized source. */
+type t
+
+let make: array<Token.t> => t
+
+/** Token whose span includes (row, col), or None if it's whitespace/empty. */
+let tokenAt: (t, ~row: int, ~col: int) => option<Token.t>
+
+/** Character at (row, col); ' ' if out of range. */
+let charAt: (t, ~row: int, ~col: int) => string
+
+/** All tokens on a given row in left-to-right order. */
+let rowTokens: (t, ~row: int) => array<Token.t>
+
+/** Highest row index in source. */
+let lastRow: t => int
+```
+
+**`canParse` contract.** A parser's `canParse` may call `peek` / `peekAt` and use `save`/`restore` to roll back a probe. It must not advance the cursor on a `false` return. On `true`, the subsequent `parse` call is allowed to mutate.
 
 **Dependencies:**
 - `Token` from types/Token.res
-- `Position` utilities from utils/PositionUtils.res
+- `PositionUtils` (utils/) for Unicode-aware column counting
 
 ---
 
@@ -358,27 +362,31 @@ let parseContent: (TokenStream.t, ParseContext.t) => array<V2Types.astNode>
 ### Component 3: Element Parser Registry
 
 **Responsibilities:**
-- Register and manage element-specific parsers
-- Select parsers based on priority
-- Support extension with new element types
+- Register element-specific parsers keyed by `nodeType`.
+- Maintain a single priority-sorted list of parsers.
+- Provide `tryParse(stream, ctx)`: walk parsers in descending priority, call each one's `canParse`, and dispatch `parse` on the first match.
+
+This component **owns priority-based dispatch**. The previously separate `PriorityMatcher` has been merged into the registry — see [Priority and Disambiguation](#priority-and-disambiguation) below for why.
 
 **Interfaces:**
 
 ```rescript
 // elements/V2ElementParser.res
 
-/** Parse result - Some(element) if successful, None if pattern doesn't match */
-type parseResult = option<V2Types.elementNode>
+/** Parse outcome:
+    - Some(node) → consumed input and produced a node
+    - None       → canParse said yes but parse aborted (recoverable; reports via ctx) */
+type parseResult = option<V2Types.astNode>
 
-/** Element parser interface (record type) */
 type t = {
   elementType: V2Types.nodeType,
   priority: int,
+  /** Pure probe: must NOT advance the cursor. Free to use save/restore. */
   canParse: TokenStream.t => bool,
+  /** Consume tokens and emit a node; record any errors/warnings on ctx. */
   parse: (ParseContext.t, TokenStream.t) => parseResult,
 }
 
-/** Helper to create an element parser */
 let make: (
   ~elementType: V2Types.nodeType,
   ~priority: int,
@@ -390,27 +398,20 @@ let make: (
 ```rescript
 // elements/V2ParserRegistry.res
 
-/** Registry type */
-type t = {
-  mutable parsers: array<V2ElementParser.t>,
-}
+type t
 
 let make: unit => t
+let makeDefault: unit => t
 
-/** Register an element parser (auto-sorted by priority) */
 let register: (t, V2ElementParser.t) => unit
-
-/** Unregister a parser by element type */
 let unregister: (t, V2Types.nodeType) => unit
 
-/** Get all parsers sorted by priority (descending) */
-let getParsersByPriority: t => array<V2ElementParser.t>
+/** Parsers in descending priority order (test/debug aid). */
+let parsers: t => array<V2ElementParser.t>
 
-/** Try to parse using registered parsers */
+/** Walk parsers by descending priority, return the first match's result.
+    None means no parser claimed the current position (caller falls back to Text). */
 let tryParse: (t, ParseContext.t, TokenStream.t) => option<V2Types.astNode>
-
-/** Create registry with all default parsers */
-let makeDefault: unit => t
 ```
 
 **Dependencies:**
@@ -465,65 +466,71 @@ let make: unit => V2ElementParser.t
 
 ---
 
-### Component 5: Priority Matcher
+### Component 5: Priority and Disambiguation
 
-**Responsibilities:**
-- Attempt pattern matching in priority order
-- Resolve pattern conflicts (e.g., `[x]` vs `[ x ]`)
-- Return the first successfully matched parser
+There are **two distinct concerns** the parser pipeline has to handle. They were previously conflated under "Priority Matcher"; this section separates them.
 
-**Interfaces:**
+#### (A) Trial Order (Priority)
+
+Priority is **the order in which `canParse` probes are attempted** at a given position. It is owned by `V2ParserRegistry`. The semantics are:
+
+> *Walk parsers in descending priority. The first parser whose `canParse` returns `true` wins. Lower-priority parsers are not tried for this position.*
+
+Priority values cluster by category, not by precise numeric distance — `dividerLabeledBold(50)` vs `dividerLabeled(48)` is **not** a tie-breaker between two overlapping patterns; both patterns are mutually exclusive at the token level, and the priority gap exists only to give each rule a stable, debuggable slot.
 
 ```rescript
-// parser/PriorityMatcher.res
+// elements/Priority.res
 
-/** Priority constants module */
+/** Canonical priorities. Higher = tried first. */
 module Priority = {
-  let string: int          // 115 - "..." (supports multiline)
-  let containerId: int     // 110
-  let propPlaceholder: int // 105
-  let emoji: int           // 100
-  let select: int          // 95
-  let input: int           // 90
-  let radio: int           // 85
-  let checkbox: int        // 80
-  let button: int          // 70
-  let link: int            // 60
-  let dividerLabeledBold: int // 50
-  let dividerLabeled: int  // 48
-  let dividerId: int       // 45
-  let divider: int         // 40
-  let container: int       // 10
-  let text: int            // 1 (fallback)
+  let string: int          // 115 - "..." (highest; suppresses inner parsing)
+  let containerId: int     // 110 - +--#id--+ / standalone | #id |
+  let propPlaceholder: int // 105 - ${name}
+  let emoji: int           // 100 - :name:
+  let select: int          // 95  - [v: ...]
+  let input: int           // 90  - [__...__]
+  let radio: int           // 85  - (*) / ( )
+  let checkbox: int        // 80  - [x] / [X] / [v] / [V] / [ ]
+  let button: int          // 70  - [ ... ]  (fallback for bracket forms)
+  let link: int            // 60  - < ... >
+  let dividerLabeledBold: int // 50 - === text ===
+  let dividerLabeled: int  // 48  - --- text ---
+  let dividerId: int       // 45  - ---#id--- / ===#id===
+  let divider: int         // 40  - --- / ===
+  let container: int       // 10  - +--name--+ (multi-line; uses GridIndex)
+  let text: int            // 1   - fallback
 }
-
-/** Priority matcher type */
-type t = {
-  registry: V2ParserRegistry.t,
-}
-
-let make: V2ParserRegistry.t => t
-
-/** Match token stream against parsers in priority order */
-let match_: (t, TokenStream.t) => option<V2ElementParser.t>
-
-/** Get all parsers sorted by priority */
-let getParsersInOrder: t => array<V2ElementParser.t>
 ```
 
-**Dependencies:**
-- `V2ParserRegistry`
-- `TokenStream` for pattern checking
+#### (B) Disambiguation Rules (inside `canParse`)
+
+Whether a token sequence **really matches** a parser's pattern is decided by that parser's `canParse`. For the famously ambiguous bracket family, `canParse` encodes the rules explicitly:
+
+| Parser | `canParse` rule (informal) |
+|--------|---------------------------|
+| Select | `[` immediately followed by `v` `:` |
+| Input | `[` followed by `__` (2+ underscores) AND a closing `__]` exists on the same line |
+| Checkbox | exactly `[x]` / `[X]` / `[v]` / `[V]` / `[ ]` (3 chars), with optional following label |
+| Button | `[` ... `]` on one line that is **not** any of the above |
+
+The previously separate Process 3 flowchart is *implementing* these rules; it is not a parallel mechanism. **Disambiguation lives inside each parser's `canParse`; the registry only decides trial order.**
+
+#### Conflict resolution policy
+
+- If two parsers might both legitimately match (rare; bug-prone), the higher-priority one wins by definition. Add a regression test fixture proving the choice.
+- If a parser is unsure (e.g. its pattern *almost* matches), prefer to **return `false` from `canParse` and let the fallback chain continue**. Emit a warning from later passes if the input looked structurally close to a known pattern (see `nearMissPatterns` heuristic in the catalog).
+
+**Dependencies:** none beyond `V2ParserRegistry` and `TokenStream`.
 
 ---
 
 ### Component 6: Layout Inferrer
 
 **Responsibilities:**
-- Infer layout based on element start positions
-- Same line elements = Row arrangement
-- Different line elements = Column arrangement
-- Group Radio buttons
+- Given a parent's `children: array<astNode>`, derive its `layoutInfo` (direction, groups, distribution).
+- Assign radio group IDs (mutating only the `group` field of `radioNode` records during AST assembly).
+
+**Single source of truth.** Element nodes live exactly once, in `parent.children`. Layout groups address them by **index range**, never by re-storing the nodes. This eliminates the children duplication of the previous design.
 
 **Interfaces:**
 
@@ -532,86 +539,74 @@ let getParsersInOrder: t => array<V2ElementParser.t>
 
 /** Layout direction */
 type direction =
-  | Row
-  | Column
-  | Mixed
+  | Row     // all children share a row
+  | Column  // each child on its own row
+  | Mixed   // multiple row-groups stacked
 
-/** Element group */
+/** A contiguous slice of parent.children that shares a layout direction.
+    [start, end_) is a half-open index range into parent.children. */
 type elementGroup = {
   direction: direction,
-  children: array<V2Types.astNode>,
-  startLine: int,
+  start: int,
+  end_: int,        // exclusive
+  startRow: int,    // visual row of the first child (debugging aid)
 }
 
-/** Layout info */
+/** Computed layout. `distribution` is None when not applicable
+    (e.g. single child, or unknown column width). */
 type layoutInfo = {
   direction: direction,
   groups: array<elementGroup>,
+  distribution: option<V2Types.distribution>,
 }
 
-/** Radio group */
-type radioGroup = {
-  id: string,
-  members: array<V2Types.radioNode>,
-}
-
-/** Infer layout from AST nodes */
-let inferLayout: array<V2Types.astNode> => layoutInfo
-
-/** Group radio buttons */
-let groupRadioButtons: array<V2Types.radioNode> => array<radioGroup>
-
-/** Calculate distribution within container */
-let calculateDistribution: (array<V2Types.astNode>, int) => V2Types.distribution
+/** Pure: derive layoutInfo for one parent given its children and bounds. */
+let inferLayout: (
+  ~children: array<V2Types.astNode>,
+  ~containerBounds: option<V2Types.bounds>=?,
+) => layoutInfo
 ```
 
 ```rescript
 // layout/RadioGrouper.res
 
-/** Group radio buttons by proximity */
-let groupByProximity: array<V2Types.radioNode> => array<array<V2Types.radioNode>>
-
-/** Assign group IDs to radio buttons */
-let assignGroupIds: array<array<V2Types.radioNode>> => array<V2Types.radioNode>
+/** Given all radio nodes inside a parent (in document order) and that parent's
+    bounds, partition them into groups by proximity heuristics
+    (see Heuristics Catalog: radioGrouping.*) and assign each one a group ID. */
+let assignGroups: (
+  array<V2Types.radioNode>,
+  ~parentBounds: option<V2Types.bounds>=?,
+) => array<V2Types.radioNode>
 ```
 
 **Dependencies:**
-- AST node position information
+- AST node position information (`row`, `col`)
+- `Heuristics` module for tunable thresholds
 
 ---
 
-### Component 7: Validator
+### Component 7: Validator (Cross-Cutting Checks)
 
-**Responsibilities:**
-- Validate parsing results
-- Collect errors and warnings
-- Support error recovery
+**Scope.** Element parsers already emit their own local errors (unclosed input, missing label, etc.) onto `ParseContext` during parse. The Validator is responsible for **cross-cutting checks that require the assembled AST**, not for re-validating what parsers already checked.
+
+Specifically:
+- **ID uniqueness** within a block (duplicate Container IDs, Button/Link slug collisions).
+- **Prop reference validity** — every `PropPlaceholder` name inside a `@component` must appear in that component's `@props:` list; otherwise emit a warning.
+- **Radio group sanity** — no group containing exactly zero selected radios is an error, but two or more selected in the same group emits `MultipleRadiosSelected` (warning).
+- **Depth limit** — enforce `parseOptions.maxDepth` on Container nesting; exceeding it produces an error and stops descending.
+- **Near-miss reporting** — patterns flagged by parsers' `canParse` as "almost" matching a known shape are surfaced as warnings (see [Heuristics Catalog](#heuristics-catalog) → `nearMissPatterns`).
 
 **Interfaces:**
 
 ```rescript
 // validator/Validator.res
 
-/** Validation result */
-type validationResult = {
-  valid: bool,
-  errors: array<V2Errors.parseError>,
-  warnings: array<V2Errors.parseWarning>,
-}
-
-/** Validate AST node */
-let validate: (V2Types.astNode, ParseContext.t) => validationResult
-
-/** Collect all errors from context */
-let collectErrors: ParseContext.t => array<V2Errors.parseError>
-
-/** Collect all warnings from context */
-let collectWarnings: ParseContext.t => array<V2Errors.parseWarning>
+/** Run all cross-cutting checks against a fully-assembled block.
+    Returns NEW errors/warnings; does not mutate the AST. */
+let validate: V2Types.blockNode => (array<V2Errors.parseError>, array<V2Errors.parseWarning>)
 ```
 
-**Dependencies:**
-- AST types
-- Error types
+**Dependencies:** AST types, Error types, `Heuristics` module.
 
 ---
 
@@ -626,10 +621,12 @@ let collectWarnings: ParseContext.t => array<V2Errors.parseWarning>
 // Base Types
 // =============================================================================
 
-/** Position in source */
+/** Position in source. Matches Token.position so positions flow through the
+    pipeline without re-encoding. 0-based throughout; display layer adds +1
+    when surfacing to humans. */
 type position = {
-  line: int,      // 1-based line number
-  column: int,    // 1-based column number (Unicode-aware)
+  row: int,       // 0-based row (line index)
+  col: int,       // 0-based visual column (Unicode-aware)
   offset: int,    // 0-based character offset
 }
 
@@ -680,17 +677,28 @@ type layoutDirection =
   | Column
   | Mixed
 
-/** Layout info */
+/** Layout info. Groups address parent.children by index range — never re-store nodes.
+    `distribution` is None when not applicable (e.g. single child, unknown width). */
 type rec layoutInfo = {
   direction: layoutDirection,
   groups: array<elementGroup>,
+  distribution: option<distribution>,
 }
 
 and elementGroup = {
   direction: layoutDirection,
-  children: array<astNode>,
-  startLine: int,
+  start: int,
+  end_: int,        // exclusive index into parent.children
+  startRow: int,    // for debugging / error reporting
 }
+
+and distribution =
+  | Equal
+  | SpaceBetween
+  | SpaceAround
+  | Start
+  | End
+  | Center
 
 // Forward declaration for recursive types
 and astNode =
@@ -812,16 +820,19 @@ and dividerNode = {
 // Special Nodes
 // =============================================================================
 
-/** String interpolation content */
+/** String interpolation content.
+    Inside `"..."`, ONLY `${prop}` and `:emoji:` are interpolated;
+    `< >`, `[ ]`, `(*)` etc. are treated as literal text. */
 and interpolationContent =
   | Literal(string)
-  | Placeholder(propPlaceholderNode)
+  | PropRef(propPlaceholderNode)
+  | EmojiRef(emojiNode)
 
 and stringNode = {
   location: sourceLocation,
-  content: string,                              // supports multiline content
-  interpolations: array<interpolationContent>,
-  multiline: bool,                              // true if contains newlines
+  content: string,                              // raw text incl. unresolved placeholders
+  interpolations: array<interpolationContent>,  // ordered segments for rendering
+  multiline: bool,                              // true if content contains '\n'
 }
 
 and emojiNode = {
@@ -866,18 +877,6 @@ type specialNode =
   | Special_String(stringNode)
   | Special_Emoji(emojiNode)
   | Special_PropPlaceholder(propPlaceholderNode)
-
-// =============================================================================
-// Distribution Types
-// =============================================================================
-
-type distribution =
-  | Equal
-  | SpaceBetween
-  | SpaceAround
-  | Start
-  | End
-  | Center
 
 // =============================================================================
 // Radio Group
@@ -1044,14 +1043,29 @@ type errorCode =
   | UnclosedString
   | UnclosedContainer
   | MissingBlockDeclaration
+  | NestedBlockDeclaration
+  | MaxDepthExceeded
 
 /** Warning codes */
 type warningCode =
   | PropOutsideComponent
-  | UnknownEmoji(string)      // carries the unknown shortcode
+  | UnknownEmoji(string)          // carries the unknown shortcode
   | MixedDividerLabelId
   | MissingCheckboxLabel
   | MissingRadioLabel
+  // -- heuristic-driven warnings (each carries a ruleId on the parseWarning record) --
+  | MisalignedContainerCorner
+  | MisalignedContainerWall
+  | InconsistentContainerWidth
+  | RadioGroupAmbiguous
+  | DuplicatePropName(string)     // carries the duplicated name
+  | DuplicateContainerId(string)
+  | UnknownPropReference(string)
+  | MultipleRadiosSelected(string) // carries group id
+  | LooksLikeButton                // near-miss
+  | LooksLikeInput
+  | LooksLikeCheckbox
+  | LooksLikeRadio
 
 /** Parse error record */
 type parseError = {
@@ -1061,11 +1075,13 @@ type parseError = {
   recoverable: bool,
 }
 
-/** Parse warning record */
+/** Parse warning record. `ruleId` traces heuristic-driven warnings back to
+    the Heuristics Catalog (e.g. "container.wallAlignment", "text.center"). */
 type parseWarning = {
   code: warningCode,
   message: string,
   location: V2Types.sourceLocation,
+  ruleId: option<string>,
 }
 
 /** Error message templates */
@@ -1081,10 +1097,11 @@ let makeError: (
   ~recoverable: bool,
 ) => parseError
 
-/** Create a parse warning */
+/** Create a parse warning. Pass `ruleId` for heuristic-sourced warnings. */
 let makeWarning: (
   ~code: warningCode,
   ~location: V2Types.sourceLocation,
+  ~ruleId: string=?,
 ) => parseWarning
 
 // Implementation
@@ -1096,6 +1113,8 @@ let getErrorMessage = (code: errorCode): string => {
   | UnclosedString => "Error: Unclosed string literal - missing '\"'"
   | UnclosedContainer => "Error: Unclosed container - missing bottom border"
   | MissingBlockDeclaration => "Error: Missing block declaration - add @scene: or @component:"
+  | NestedBlockDeclaration => "Error: @scene/@component cannot be nested inside another block"
+  | MaxDepthExceeded => "Error: Container nesting exceeded maxDepth"
   }
 }
 
@@ -1106,6 +1125,18 @@ let getWarningMessage = (code: warningCode): string => {
   | MixedDividerLabelId => "Warning: Mixed label and ID in divider - treating as text"
   | MissingCheckboxLabel => "Warning: Checkbox without label"
   | MissingRadioLabel => "Warning: Radio without label"
+  | MisalignedContainerCorner => "Warning: Container corners are not aligned"
+  | MisalignedContainerWall => "Warning: Container wall column drifted from the corner"
+  | InconsistentContainerWidth => "Warning: Top and bottom borders have different widths"
+  | RadioGroupAmbiguous => "Warning: Could not unambiguously group these radios"
+  | DuplicatePropName(name) => `Warning: Duplicate prop '${name}' - last declaration wins`
+  | DuplicateContainerId(id) => `Warning: Duplicate container id '${id}'`
+  | UnknownPropReference(name) => `Warning: \${${name}} does not appear in @props`
+  | MultipleRadiosSelected(g) => `Warning: Multiple selected radios in group '${g}'`
+  | LooksLikeButton => "Warning: Bracket form looks like a Button but does not match"
+  | LooksLikeInput => "Warning: Bracket form looks like an Input but does not match"
+  | LooksLikeCheckbox => "Warning: Bracket form looks like a Checkbox but does not match"
+  | LooksLikeRadio => "Warning: Paren form looks like a Radio but does not match"
   }
 }
 ```
@@ -1130,7 +1161,7 @@ flowchart TD
     PARSE_COMPONENT --> PARSE_PROPS
 
     PARSE_PROPS --> PARSE_CONTENT[BlockParser.parseContent]
-    PARSE_CONTENT --> PRIORITY_MATCH{PriorityMatcher.match_}
+    PARSE_CONTENT --> PRIORITY_MATCH{V2ParserRegistry.tryParse}
 
     PRIORITY_MATCH -->|Match success| ELEMENT_PARSE[V2ElementParser.parse]
     PRIORITY_MATCH -->|Match failure| TEXT_FALLBACK[TextParser.parse]
@@ -1177,7 +1208,7 @@ flowchart TD
     PARSE_CONTENT --> RECURSE{Nested Container?}
 
     RECURSE -->|Yes| RECURSIVE_PARSE[Recursive ContainerParser.parse]
-    RECURSE -->|No| ELEMENT_PARSE[PriorityMatcher.match_]
+    RECURSE -->|No| ELEMENT_PARSE[V2ParserRegistry.tryParse]
 
     RECURSIVE_PARSE --> COLLECT[Add to children]
     ELEMENT_PARSE --> COLLECT
@@ -1316,9 +1347,9 @@ flowchart TD
 
     RECOVERABLE --> ERROR_TYPE{errorCode type}
 
-    ERROR_TYPE -->|UnclosedContainer| RECOVER_CONTAINER[Parse until current line<br/>Add ErrorNode]
-    ERROR_TYPE -->|UnclosedString| RECOVER_STRING[String until end of line<br/>Add ErrorNode]
-    ERROR_TYPE -->|UnclosedInput| RECOVER_INPUT[Find ] to close<br/>Add ErrorNode]
+    ERROR_TYPE -->|UnclosedContainer| RECOVER_CONTAINER[Sync to next blank row /<br/>next +-leading row / next @block<br/>Add ErrorNode]
+    ERROR_TYPE -->|UnclosedString| RECOVER_STRING[String until end of row<br/>Add ErrorNode]
+    ERROR_TYPE -->|UnclosedInput| RECOVER_INPUT[Bounded to END OF CURRENT ROW only<br/>never crosses rows<br/>Add ErrorNode]
     ERROR_TYPE -->|InvalidIdFormat| RECOVER_ID[Treat as text<br/>Add warning]
 
     RECOVER_CONTAINER --> COLLECT_ERROR[ParseContext.addError]
@@ -1370,12 +1401,246 @@ let errorExample: V2Errors.parseError = {
   code: UnclosedContainer,
   message: "Error: Unclosed container - missing bottom border",
   location: {
-    start: { line: 5, column: 1, offset: 45 },
-    end_: { line: 5, column: 12, offset: 56 },
+    start: { row: 4, col: 0, offset: 45 },   // displayed as line 5, col 1
+    end_:  { row: 4, col: 11, offset: 56 },  // displayed as line 5, col 12
   },
   recoverable: true,
 }
 ```
+
+---
+
+## Heuristics Catalog
+
+ASCII wireframes are hand-drawn. Strict rules would reject realistic input; over-loose rules would silently misinterpret it. This catalog **names every heuristic the parser applies**, exposes its threshold as a tunable constant, and links it to the warnings/errors it can produce.
+
+All thresholds live in a single module:
+
+```rescript
+// utils/Heuristics.res
+
+type t = {
+  // -- Grid alignment --
+  /** Max column delta (in visual columns) for `+` corners and `|` walls
+      to still count as "the same vertical line". Default: 1. */
+  containerColumnTolerance: int,
+
+  /** Max column delta for top-border length vs bottom-border length. Default: 2. */
+  containerWidthTolerance: int,
+
+  // -- Radio grouping --
+  /** Two radios on the same row, separated by ≤ this many spaces, group together. Default: 6. */
+  radioHorizontalGap: int,
+
+  /** Two radios on consecutive rows whose `col` differs by ≤ this many columns,
+      AND with no other element between them, group together. Default: 1. */
+  radioVerticalColumnTolerance: int,
+
+  /** Max blank rows between two radios that still allows grouping. Default: 0. */
+  radioMaxBlankRows: int,
+
+  // -- Text alignment --
+  /** Threshold for declaring a text block "centered": |leftPad - rightPad| / containerWidth ≤ this. Default: 0.15. */
+  centerSymmetryThreshold: float,
+
+  /** Threshold for declaring a text "right-aligned": rightPad / containerWidth ≤ this. Default: 0.10. */
+  rightAlignThreshold: float,
+
+  // -- Divider --
+  /** Minimum dash/equals run length to count as a Divider (vs decoration). Default: 3. */
+  dividerMinRun: int,
+
+  // -- Near-miss detection --
+  /** Edit distance (in tokens) under which a non-matching bracket form is
+      flagged as a "looks like X" warning. Default: 1. */
+  nearMissTokenDistance: int,
+}
+
+let default: t
+
+/** Merge user-supplied overrides into defaults. */
+let make: (~overrides: t=?) => t
+```
+
+### Registered Heuristics
+
+| ID | Concern | Threshold | Defaults to | Surfaces as |
+|----|---------|-----------|-------------|-------------|
+| `container.cornerAlignment` | `+` corners aligned across top/bottom borders | `containerColumnTolerance` | 1 col | `MisalignedContainerCorner` (warning) |
+| `container.wallAlignment` | `|` walls aligned with corners on every row | `containerColumnTolerance` | 1 col | `MisalignedContainerWall` (warning) |
+| `container.widthConsistency` | top border length ≈ bottom border length | `containerWidthTolerance` | 2 col | `InconsistentContainerWidth` (warning) |
+| `radioGrouping.horizontal` | side-by-side radios on one row | `radioHorizontalGap` | 6 sp | (informational, used by RadioGrouper) |
+| `radioGrouping.vertical` | stacked radios on consecutive rows | `radioVerticalColumnTolerance`, `radioMaxBlankRows` | 1 col, 0 rows | (informational) |
+| `radioGrouping.container` | all radios inside one container group together unless split by clear separators | (no threshold; structural) | — | `RadioGroupAmbiguous` (warning) when both horizontal and vertical clues conflict |
+| `text.center` | centered text detection | `centerSymmetryThreshold` | 0.15 | sets `alignment = Center` |
+| `text.right` | right-aligned text detection | `rightAlignThreshold` | 0.10 | sets `alignment = Right` |
+| `divider.minRun` | `---` / `===` minimum length | `dividerMinRun` | 3 chars | rejects shorter runs (treated as text) |
+| `nearMissPatterns` | bracket-form one-edit away from known | `nearMissTokenDistance` | 1 token | `LooksLikeButton`, `LooksLikeInput`, ... (warnings) |
+| `errorRecovery.containerSync` | unclosed container sync point | structural: next blank row OR next `+`-leading row OR next `@scene/@component` | — | `UnclosedContainer` (error) + ErrorNode |
+| `errorRecovery.inputSync` | unclosed `[__` sync point | structural: **end of current row only** (never crosses rows) | — | `UnclosedInput` (error) + ErrorNode |
+
+### Confidence and Auditability
+
+Every heuristic decision attaches a **rule ID** to any warning it emits. Warnings carry the rule ID so users (and tests) can trace "why was this Center?" back to a single rule:
+
+```rescript
+// V2Errors.parseWarning gains an optional `ruleId` field:
+type parseWarning = {
+  code: warningCode,
+  message: string,
+  location: V2Types.sourceLocation,
+  ruleId: option<string>,   // e.g. "text.center", "container.wallAlignment"
+}
+```
+
+Each parser/inferrer that consults a heuristic must, when its decision was non-obvious, emit either a warning with `ruleId`, or — for purely informational decisions — record a debug breadcrumb the test harness can assert against.
+
+### Testing the Heuristics
+
+A dedicated `__tests__/heuristics/` directory holds:
+
+- **Golden fixtures** — known-tricky hand-drawn inputs paired with the expected parser output and the expected `ruleId` set.
+- **Tolerance sweeps** — for each numeric threshold, fixtures that bracket the boundary (just-inside, exact, just-outside) to lock the behavior at that boundary.
+- **Conflict fixtures** — inputs designed to make two heuristics disagree, with the expected resolution.
+
+Changes to default thresholds require updating golden fixtures and produce a visible diff in PRs.
+
+---
+
+## Key Algorithms
+
+This section pins down the algorithms the previous design left as bare function signatures.
+
+### Algorithm 1: Container Detection (Grid-Based)
+
+**Input.** Source text + `GridIndex`.
+
+**Output.** A `containerNode` with `bounds`, plus the in-bounds substring to be re-parsed for children.
+
+**Steps.**
+
+1. Scan the `GridIndex` row by row for a `Plus` token followed by a `Dashes(n)` run followed eventually by another `Plus` on the same row. This is a **candidate top border**.
+2. Extract the candidate's left column `Lc` and right column `Rc`.
+3. Walk downward from row+1. On each row, check `GridIndex.charAt(row, Lc)` and `charAt(row, Rc)`:
+   - Both `|` (within `container.wallAlignment` tolerance) → row is a body row.
+   - Both `+` and the row between them is a dash run → candidate **bottom border**.
+   - Otherwise → container is unclosed; emit `UnclosedContainer` and recover per `errorRecovery.containerSync`.
+4. The bottom border's left/right columns must match `Lc`/`Rc` within `container.widthConsistency`; otherwise emit `InconsistentContainerWidth` warning.
+5. Bounds = `{ x: Lc, y: topRow, width: Rc - Lc + 1, height: bottomRow - topRow + 1 }`.
+6. The container's children are produced by re-tokenizing the inner region `(topRow+1..bottomRow-1, Lc+1..Rc-1)` with adjusted positions, then running the full parse loop on that sub-stream. Nested containers are discovered by recursion at step 1.
+
+**Why grid-based?** It is the only way to validate that walls on row 4 actually align with corners on row 2. Stream-based detection would have to backtrack across newlines for every `|` and is both slower and structurally unable to express "same column."
+
+### Algorithm 2: Container ID Resolution
+
+When a container is parsed, both Format 1 (`+--#id--+`) and Format 2 (`| #id |` as a standalone line) may be present.
+
+1. Collect `format1Id`, `format2Ids` (array — multiple Format 2 candidates).
+2. If `format1Id` is present AND `format2Ids` is non-empty → use `format1Id`; demote each Format 2 candidate to a TextNode child; do not emit an error.
+3. If only `format2Ids` is present:
+   - 1 candidate → that is the ID.
+   - 2+ candidates → emit `MultipleIdDeclarations`, attach the first as the ID, demote the rest to TextNode, mark the node as `containsErrorRecovery`.
+4. A `| #id text |` line (mixed) is detected during line parse; emit `InvalidIdFormat` and treat the whole line as text.
+
+### Algorithm 3: Radio Group Assignment
+
+**Input.** All `radioNode`s discovered inside one parent (in document order), plus parent bounds.
+
+**Output.** Same nodes with `group: Some(groupId)`.
+
+**Procedure.**
+
+1. Build a graph where each radio is a node. Add an edge between two radios iff **any** of:
+   - **Horizontal adjacency**: same row, column distance ≤ `radioHorizontalGap`, no non-whitespace token between them.
+   - **Vertical adjacency**: row distance ≤ `radioMaxBlankRows + 1`, column distance ≤ `radioVerticalColumnTolerance`, no element between them on intervening columns.
+2. Compute connected components. Each component is one group.
+3. If the parent has bounds AND the parent is a Container AND exactly one component exists → assign it the container's id (if any), else `radio-group-<containerSlug>-1`.
+4. If multiple components share the same parent Container with no clear visual separator (e.g. no Divider between them), emit `RadioGroupAmbiguous` (warning, ruleId `radioGrouping.container`).
+5. Group IDs for multi-component cases: `<parentSlug>-group-<n>`, n starting at 1, document order.
+
+### Algorithm 4: Text Alignment Detection
+
+For a `textNode` inside a Container with known `bounds.width = W`:
+
+1. Compute `leftPad` = columns from container's inner-left to text start.
+2. Compute `rightPad` = columns from text end to container's inner-right.
+3. If `leftPad < 2` AND `rightPad < 2` → `Left` (the text fills the row).
+4. If `rightPad / W ≤ rightAlignThreshold` AND `leftPad > rightPad * 2` → `Right`.
+5. If `|leftPad - rightPad| / W ≤ centerSymmetryThreshold` → `Center`.
+6. Otherwise → `Left`.
+
+When step 4 or 5 fires, emit a debug breadcrumb tagged with the matching `ruleId` so tests can assert it.
+
+For text **outside** a Container (no `W`), default to `Left` and never invoke this algorithm.
+
+### Algorithm 5: Props Parsing
+
+The `@props:` attribute syntax is comma-separated. Each entry:
+
+```
+name              → { name, optional: false, defaultValue: None }
+name?             → { name, optional: true,  defaultValue: None }
+name=value        → { name, optional: false, defaultValue: Some(value) }
+name?=value       → { name, optional: true,  defaultValue: Some(value) }
+"a quoted name"=v → name with spaces; quoted form preserves verbatim
+```
+
+Whitespace around commas and `=` is stripped. Duplicate `name`s within the same component emit `DuplicatePropName` (warning); the last occurrence wins.
+
+### Algorithm 6: maxDepth Enforcement
+
+A counter on `ParseContext` increments on entering a Container, decrements on exit. If the counter would exceed `parseOptions.maxDepth`:
+
+1. Emit `MaxDepthExceeded` (error).
+2. Stop descending; the offending Container is parsed as an empty container (no children) with `containsErrorRecovery = true`.
+3. Continue parsing siblings normally.
+
+### Scene/Component Nesting
+
+For v2.3, Scene and Component blocks **cannot be nested** inside other blocks. `astNode`'s variants exist for AST uniformity, not because nesting is legal. The block parser enforces this: a `@scene:` or `@component:` line encountered inside an already-active block produces `NestedBlockDeclaration` (error) and starts a new top-level block at that point.
+
+---
+
+## Mutability Policy
+
+Mutability has a narrow, deliberate scope:
+
+- **AST nodes are immutable records.** Once constructed and added to `parent.children`, they are never edited in place. Re-deriving (e.g. assigning a radio group ID) is done by **rebuilding** the parent with `{...parent, children: updated}`.
+- **TokenStream cursor is mutable**, contained inside the `TokenStream.t` value. Probing (`canParse`) must use `save`/`restore`; consuming (`parse`) advances the cursor and is irreversible.
+- **`ParseContext` is mutable** as an append-only error/warning collector. No other field mutates after `make`. Container nesting depth is the only counter.
+- **Element parsers are pure functions of `(ctx, stream) → option<node>`.** They may mutate `ctx` (append errors), advance `stream`, and otherwise have no side effects.
+- **No global state.** `EmojiRegistry` and `V2ParserRegistry` are instances passed in; default instances are constructed at `parse` entry.
+
+Implementations should reject patterns that thread mutable state through helper functions; route everything through the cursor and the context.
+
+---
+
+## Unicode Policy
+
+Wireframes are visually aligned ASCII art, so the parser must reason in **visual columns**, not bytes or Unicode code points.
+
+- **`tabSize`** (default 4) determines tab expansion when computing `col`.
+- **Wide characters** (East Asian Wide, including CJK ideographs and full-width forms): each counts as **2 visual columns** for grid alignment.
+- **Combining marks and ZWJ sequences** (e.g. emoji `👨‍👩‍👧`): the entire grapheme cluster counts as the visual width of its base (typically 2 for emoji).
+- **Surrogate pairs and code points beyond U+FFFF**: handled at the grapheme cluster level — never split.
+- **Bidi text**: out of scope for v2.3. Right-to-left text inside wireframes may render incorrectly; the parser treats RTL characters as LTR for column-counting purposes.
+
+A single `UnicodeUtils` module owns these calculations:
+
+```rescript
+// utils/UnicodeUtils.res
+
+/** Visual width of a single grapheme cluster (1 for narrow, 2 for wide, 0 for combining). */
+let graphemeWidth: string => int
+
+/** Iterate grapheme clusters of a string with (offsetStart, offsetEnd, visualWidth). */
+let foldGraphemes: (string, ('a, ~start: int, ~end_: int, ~width: int) => 'a, 'a) => 'a
+
+/** Visual column count of a string with a starting column (tab-aware). */
+let visualWidth: (string, ~startCol: int=?, ~tabSize: int=?) => int
+```
+
+All position computations in the Lexer route through these helpers; no other module is allowed to count columns directly.
 
 ---
 
@@ -1480,23 +1745,32 @@ describe("ContainerParser", () => {
 
 ### Optimization Strategies
 
-1. **Lazy Tokenization**
-   - Generate tokens only when needed
-   - Minimize memory usage
+1. **Eager tokenization with random-access GridIndex.**
+   The lexer tokenizes the entire source up front. This is intentional: ASCII-art parsing constantly needs random access to columns on earlier and later rows (Container wall checks, text alignment, side-by-side detection). Lazy tokenization would force backtracking across newlines on every grid query and was rejected.
 
-2. **Look-ahead Caching**
-   - Cache repetitive look-aheads in Priority Matcher
-   - Improve pattern matching performance
+2. **One-shot `canParse`.**
+   Parsers' `canParse` probes are deliberately cheap (peek + maybe a single `peekAt`). They do not cache because there is no recomputation: `tryParse` walks parsers in priority order at each position exactly once, and the first match wins.
 
-3. **Incremental Parsing (Future)**
-   - Re-parse only changed portions
-   - Support real-time editing environments
+3. **GridIndex memory.**
+   `GridIndex` uses a per-row sparse representation: only positions that carry a non-whitespace token are stored. Pure whitespace rows take O(1). Typical wireframes are sparse, so memory is well under the input size.
+
+4. **Incremental Parsing (out of scope for v2.3).**
+   Re-parsing only changed regions requires AST diffing and a stable identity scheme; intentionally deferred to a later version.
+
+### Performance Targets (measurement contract)
+
+The targets in the Testing Strategy section apply to:
+- **Hardware**: Apple Silicon M-series or equivalent x86-64 laptop (≥ 2.5 GHz, ≥ 8 GB RAM).
+- **Runtime**: Node.js ≥ 20, ReScript compiler version pinned by the repo's `package.json`.
+- **Methodology**: best-of-5 wall time, single threaded, no parallel work. Measured via Vitest's `bench` or a dedicated `__tests__/perf/` harness.
+- **Memory**: peak RSS during a single parse run, measured via `process.memoryUsage().heapUsed` snapshot deltas.
+
+If a CI machine cannot meet these baselines, the target is adjusted in `vitest.config` with a comment linking back to this section, not silently relaxed.
 
 ### Memory Management
 
-- Token object pooling
-- AST node reuse (where possible)
-- Streaming processing for large strings
+- Token records are plain ReScript records; no pooling.
+- AST nodes are immutable records; sharing happens naturally for repeated text content via JavaScript engine string interning, no explicit reuse.
 
 ---
 
@@ -1695,14 +1969,23 @@ result.warnings->Array.forEach(w => {
 | REQ-12 String Literal | StringParser.res, stringNode (multiline supported) | Unit |
 | REQ-13 Emoji | EmojiParser.res, emojiNode, EmojiRegistry.res | Unit |
 | REQ-14 PropPlaceholder | PropPlaceholderParser.res, propPlaceholderNode | Unit |
-| REQ-15 Implicit Layout | LayoutInferrer.res, layoutInfo | Integration |
-| REQ-16 Priority System | PriorityMatcher.res, Priority module | Integration |
-| REQ-17 Error Handling | Validator.res, V2Errors.res | Error Recovery |
+| REQ-15 Implicit Layout | LayoutInferrer.res, layoutInfo, Algorithm 4 | Integration, Heuristics |
+| REQ-16 Priority System | V2ParserRegistry.tryParse, Priority module, "Priority and Disambiguation" | Integration |
+| REQ-17 Error Handling | Validator.res, V2Errors.res, Heuristics Catalog | Error Recovery |
 | REQ-18 AST Output | V2Types.res, parseResult | Integration |
-| REQ-19 Performance | Lazy tokenization, caching | Performance |
-| REQ-20 Extensibility | V2ParserRegistry.res, EmojiRegistry.res | Unit |
-| REQ-21 Error Recovery | Validator.res, synchronization points | Error Recovery |
-| REQ-22 Unicode | PositionUtils.res, UnicodeUtils.res | Unit |
+| REQ-19 Performance | Eager tokenization + GridIndex, measurement contract | Performance |
+| REQ-20 Extensibility | V2ParserRegistry.res, EmojiRegistry.res, Heuristics overrides | Unit |
+| REQ-21 Error Recovery | Validator.res, synchronization points, Algorithm 6 | Error Recovery |
+| REQ-22 Unicode | PositionUtils.res, UnicodeUtils.res, Unicode Policy | Unit |
+
+### Cross-Cutting Sections
+
+| Section | Why it exists | Tested in |
+|---------|---------------|-----------|
+| Heuristics Catalog | Make every tunable threshold visible and auditable | `__tests__/heuristics/` |
+| Key Algorithms | Pin down the non-trivial procedures (Container, Radio grouping, Alignment, Props, Depth) | Integration, Heuristics |
+| Mutability Policy | Prevent ad-hoc mutation creeping into the parse pipeline | reviewed at code-review |
+| Unicode Policy | Wide-character and grapheme handling for visual alignment | `UnicodeUtils_test.res` |
 
 ---
 
@@ -1786,12 +2069,13 @@ This design document defines the complete architecture and detailed design for t
 
 **Key Design Decisions:**
 
-1. **Modular Architecture**: Separated into Lexer, Parser, Element Parsers, Layout Inferrer
-2. **Priority-based Pattern Matching**: Clear element distinction with priorities from 115 to 1
-3. **Error Recovery**: Support partial parsing through synchronization points
-4. **Extensibility**: Easy addition of new element types through Element Parser registry
-5. **Performance**: Optimization through lazy tokenization and caching
-6. **ReScript Patterns**: Using variant types, record types, and module-based organization
+1. **Grid-aware lexer**: Tokens carry both 1D offset and 2D `(row, col)`; a `GridIndex` enables random column lookups required by ASCII-art parsing (Container walls, alignment, side-by-side layout).
+2. **Heuristics are first-class**: Every tolerance lives in a single `Heuristics` module, every heuristic-driven warning carries a `ruleId`, and the Heuristics Catalog section documents each rule.
+3. **Single dispatch mechanism**: `V2ParserRegistry.tryParse` walks parsers in priority order; disambiguation lives inside each parser's `canParse`. There is no parallel matcher.
+4. **No data duplication in layout**: `layoutInfo` addresses children by index range; nodes live exactly once in `parent.children`.
+5. **Bounded error recovery**: Each recoverable error has a named synchronization rule (e.g. `UnclosedInput` is row-bounded; never crosses rows).
+6. **Mutability is narrowly scoped**: Documented Mutability Policy makes `ParseContext` and `TokenStream` cursor the only mutable surfaces.
+7. **ReScript patterns**: Variant types for nodes/errors, record types for parser interfaces, immutable AST, `@genType` at the public boundary.
 
 **ReScript-Specific Patterns:**
 
@@ -1809,6 +2093,21 @@ This design document defines the complete architecture and detailed design for t
 
 ---
 
-**Version**: 1.1.0
-**Last Updated**: 2025-12-27
+**Version**: 1.2.0
+**Last Updated**: 2026-06-08
 **Status**: Draft
+
+### Changelog
+
+- **1.2.0 (2026-06-08)** — Critical review pass.
+  - Committed to grid-aware lexer (2D + 1D coordinates, `GridIndex`).
+  - Merged `PriorityMatcher` into `V2ParserRegistry`; clarified the separation of trial-order vs disambiguation.
+  - Restructured `layoutInfo` so children are not duplicated (index ranges instead of node arrays).
+  - Validator scope narrowed to cross-cutting checks; per-parser checks remain in parsers.
+  - Added **Heuristics Catalog** section: named, tunable, testable rules with `ruleId` traceability.
+  - Added **Key Algorithms** section: Container detection, ID resolution, Radio grouping, Text alignment, Props parsing, maxDepth, Scene/Component nesting.
+  - Added **Mutability Policy** and **Unicode Policy** sections.
+  - `interpolationContent` now includes `EmojiRef`.
+  - `parseWarning` gained `ruleId`; new warning codes for heuristic-driven cases.
+  - Reworked error-recovery sync points (`UnclosedInput` is row-bounded).
+  - Performance section: rejected lazy tokenization, added measurement contract.
