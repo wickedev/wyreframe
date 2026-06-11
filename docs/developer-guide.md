@@ -1,1182 +1,388 @@
 # Wyreframe Developer Guide
 
 **Version**: 0.4.3
-**Date**: 2025-12-27
-**Language**: ReScript
+**Date**: 2026-06-11
+**Language**: ReScript 12 (+ @rescript/core)
 **Target Audience**: Developers extending or maintaining the parser
+
+This guide covers the **V2 parser** (`src/parser/v2/`, syntax v2.3). The V1 pipeline is summarized in [Legacy V1 Architecture](#legacy-v1-architecture).
 
 ---
 
 ## Table of Contents
 
 1. [Introduction](#introduction)
-2. [3-Stage Architecture Overview](#3-stage-architecture-overview)
-3. [Understanding the Grid Scanner](#understanding-the-grid-scanner)
-4. [Understanding the Shape Detector](#understanding-the-shape-detector)
-5. [Understanding the Semantic Parser](#understanding-the-semantic-parser)
-6. [Creating Custom Element Parsers](#creating-custom-element-parsers)
-7. [Extension Points](#extension-points)
-8. [Error System Extension](#error-system-extension)
-9. [Testing Your Extensions](#testing-your-extensions)
-10. [Performance Considerations](#performance-considerations)
-11. [Common Patterns and Best Practices](#common-patterns-and-best-practices)
+2. [Repository Layout](#repository-layout)
+3. [V2 Pipeline Overview](#v2-pipeline-overview)
+4. [Grid-Aware Lexer](#grid-aware-lexer)
+5. [Priority Dispatch and the Registry](#priority-dispatch-and-the-registry)
+6. [Creating a Custom Element Parser](#creating-a-custom-element-parser)
+7. [Heuristics](#heuristics)
+8. [Error Recovery](#error-recovery)
+9. [Layout Inference](#layout-inference)
+10. [Validator](#validator)
+11. [Mutability Policy](#mutability-policy)
+12. [Emoji Registry](#emoji-registry)
+13. [Testing](#testing)
+14. [Performance Targets](#performance-targets)
+15. [Legacy V1 Architecture](#legacy-v1-architecture)
+16. [V1/V2 Migration Path](#v1v2-migration-path)
 
 ---
 
 ## Introduction
 
-The Wyreframe parser is designed with extensibility as a core principle. This guide will help you understand the architecture and show you how to extend the parser to support new element types, custom validation rules, and enhanced error messages.
+The V2 parser converts syntax v2.3 ASCII wireframes into an immutable AST. Its core design decisions:
 
-### What You'll Learn
-
-- How the 3-stage pipeline processes ASCII wireframes
-- How to create custom element parsers
-- Where and how to extend the parser for your needs
-- Best practices for testing and performance
+1. **Grid-aware lexer** — tokens carry both a 1D offset and 2D `(row, col)` visual coordinates; a `GridIndex` enables the random column lookups ASCII-art parsing needs.
+2. **Heuristics are first-class** — every tolerance lives in one `Heuristics` module; every heuristic-driven warning carries a `ruleId`.
+3. **Single dispatch mechanism** — `V2ParserRegistry.tryParse` walks parsers in priority order; disambiguation lives inside each parser's `canParse`.
+4. **No data duplication in layout** — `layoutInfo` addresses children by index range; nodes live exactly once in `parent.children`.
+5. **Bounded error recovery** — each recoverable error has a named synchronization rule.
+6. **Narrow mutability** — `ParseContext` and the `TokenStream` cursor are the only mutable surfaces.
 
 ### Prerequisites
 
-- Basic ReScript knowledge
-- Familiarity with functional programming concepts
-- Understanding of AST (Abstract Syntax Tree) concepts
+- ReScript 12 / @rescript/core basics (variants, records, `option`, `result`)
+- Vitest (tests are written with `rescript-vitest` and plain Vitest)
+
+Authoritative design documents live in `.claude/specs/syntax-v2-parser/` (requirements, design, tasks).
 
 ---
 
-## 3-Stage Architecture Overview
+## Repository Layout
 
-The Wyreframe parser uses a systematic 3-stage pipeline that separates concerns and enables clear, maintainable code.
-
-```mermaid
-graph TB
-    A[ASCII Input] --> B[Stage 1: Grid Scanner]
-    B --> C[Grid Data Structure]
-    C --> D[Stage 2: Shape Detector]
-    D --> E[Shape Hierarchy]
-    E --> F[Stage 3: Semantic Parser]
-    F --> G[AST Output]
-
-    style B fill:#e1f5ff
-    style D fill:#fff4e1
-    style F fill:#e8f5e8
+```
+src/parser/
+├── Core/                    # Shared V1 types (Position, Bounds)
+├── Semantic/                # V1 parser implementation
+├── Detector/                # V1 element detection
+├── Errors/                  # V1 error handling
+├── Interactions/            # V1 Interaction DSL parsing
+├── Fixer/                   # V1 auto-fix
+├── Parser.res               # V1 entry point
+├── ParserTypes.res          # V1 types
+└── v2/                      # V2 parser (syntax v2.3)
+    ├── V2Parser.res         # Entry point: parse / parseWireframe
+    ├── V2Parser.d.ts        # Hand-rolled TS declarations
+    ├── types/               # Token, V2Types (AST), V2Errors
+    ├── lexer/               # Scanner, Lexer, TokenStream, GridIndex
+    ├── parser/              # BlockParser, ParseContext, Priority
+    ├── elements/            # 12 element parsers + V2ElementParser + V2ParserRegistry
+    ├── layout/              # LayoutInferrer, RadioGrouper
+    ├── validator/           # Validator (cross-cutting checks)
+    ├── registry/            # EmojiRegistry
+    ├── utils/               # UnicodeUtils, Heuristics, Slugify, EscapeUtils, PositionUtils
+    └── __tests__/           # V2 test suite
 ```
 
-### Stage 1: Grid Scanner
+---
 
-**Purpose**: Convert linear ASCII text into a searchable 2D grid.
+## V2 Pipeline Overview
 
-**Input**: String (ASCII wireframe)
-**Output**: Grid data structure with position indices
+`V2Parser.parse` runs the following stages:
 
-**Key Responsibilities**:
-- Normalize line endings and widths
-- Build 2D character array with (row, col) addressing
-- Create indices for special characters (`+`, `-`, `|`, `=`)
-- Enable position-based navigation (scanRight, scanDown, etc.)
+```
+source string
+   │
+   ▼
+Lexer.tokenize(~tabSize)        // Scanner + Lexer: grid-aware tokens
+   │
+   ▼
+GridIndex.make(tokens)          // random (row, col) lookups
+TokenStream.make(tokens)        // sequential cursor with save/restore
+   │
+   ▼
+V2Parser block loop             // find next @scene:/@component: header
+   │   └─ BlockParser.parseHeaderAttrs   // @title/@device/@transition/@props
+   │   └─ BlockParser.parseContent       // body rows
+   │        └─ V2ParserRegistry.tryParse // priority dispatch → element parsers
+   │
+   ▼
+RadioGrouper.assignGroupsRecursive       // radio group assignment
+LayoutInferrer.inferLayout               // Row/Column groups by start row
+Validator.validate                       // cross-cutting checks
+   │
+   ▼
+parseResult { ast, blocks, errors, warnings, success }
+```
 
-**Why This Matters**: The Grid provides spatial awareness that regex-based parsing lacks. You can ask questions like "what's to the right of this position?" or "trace a line until you hit a corner."
-
-### Stage 2: Shape Detector
-
-**Purpose**: Recognize geometric shapes and their spatial relationships.
-
-**Input**: Grid data structure
-**Output**: Hierarchy of boxes with bounds and nesting information
-
-**Key Responsibilities**:
-- Trace box boundaries starting from corner characters
-- Extract box names from top borders
-- Detect horizontal dividers (lines with `=`)
-- Build parent-child hierarchy based on spatial containment
-- Validate box structure (matching widths, aligned edges)
-
-**Why This Matters**: The Shape Detector provides structural understanding. It knows which boxes are nested inside others, enabling the semantic parser to understand context.
-
-### Stage 3: Semantic Parser
-
-**Purpose**: Interpret box contents and build the final AST.
-
-**Input**: Grid + Shape hierarchy
-**Output**: AST with typed elements (buttons, inputs, links, etc.)
-
-**Key Responsibilities**:
-- Parse box contents line by line
-- Recognize UI elements using pluggable parsers
-- Calculate element alignment (left/center/right)
-- Build scene structure from directives
-- Generate complete AST
-
-**Why This Matters**: The Semantic Parser is where extensibility shines. Adding new element types doesn't require changing the Grid or Shape detection logic.
+Multiple top-level blocks are parsed in a loop; `parseContent` stops at the next block boundary. In `strict` mode the first erroring block halts the loop and all errors are promoted to non-recoverable.
 
 ---
 
-## Understanding the Grid Scanner
+## Grid-Aware Lexer
 
-### Grid Data Structure
+### Tokens
+
+Every token carries:
+
+- `kind` (e.g. `Plus`, `Dash`, `Pipe`, `LBracket`, `Text`, `Whitespace`, `Newline`, `EOF`)
+- `text` — the raw lexeme
+- `position` — `{ row, col, offset }`, all 0-based
+
+`col` is a **visual column**: East Asian Wide characters and emoji grapheme clusters count as 2, combining marks as 0, and tabs expand per `tabSize`. All column math routes through `utils/UnicodeUtils.res` — no other module counts columns directly. LF, CRLF, and standalone CR line endings are normalized by the Scanner.
+
+### GridIndex
+
+`GridIndex` maps `(row, col)` to tokens, enabling the random lookups Container parsing needs (e.g. "is there a `|` at column 42 of every body row?", "does the bottom border width match the top?").
+
+### TokenStream
+
+A mutable cursor over the token array with `peek` / `next` / `save` / `restore` / `skipToEndOfRow` / `rewindToRow`. Element parsers use save/restore for speculative look-ahead.
+
+---
+
+## Priority Dispatch and the Registry
+
+`V2ParserRegistry` owns trial order. `tryParse` walks parsers in **descending priority** and dispatches the first whose `canParse` returns `true`:
+
+| Priority | Parser | Module |
+|----------|--------|--------|
+| 115 | String | `StringParser` |
+| 105 | PropPlaceholder | `PropPlaceholderParser` |
+| 100 | Emoji | `EmojiParser` |
+| 95 | Select | `SelectParser` |
+| 90 | Input | `V2InputParser` |
+| 85 | Radio | `RadioParser` |
+| 80 | Checkbox | `V2CheckboxParser` |
+| 70 | Button | `V2ButtonParser` |
+| 60 | Link | `V2LinkParser` |
+| 40–50 | Divider (all forms) | `DividerParser` |
+| 10 | Container | `ContainerParser` |
+| 1 | Text (fallback) | `V2TextParser` |
+
+Two contracts keep this simple:
+
+1. **`canParse` is a read-only probe.** It must not advance the stream (the registry defensively restores the cursor either way).
+2. **Disambiguation lives in each parser**, not in the registry. The bracket family (`[ ]`) resolves as Select > Input > Checkbox > Button purely through each parser's own `canParse` logic; the numeric gaps exist for debuggability, not tie-breaking.
+
+A `parse` returning `None` also restores the cursor, letting lower-priority parsers try.
+
+---
+
+## Creating a Custom Element Parser
+
+The parser interface (`elements/V2ElementParser.res`):
 
 ```rescript
 type t = {
-  cells: array<array<cellChar>>,
-  width: int,
-  height: int,
-  cornerIndex: array<Position.t>,      // All '+' positions
-  hLineIndex: array<Position.t>,       // All '-' positions
-  vLineIndex: array<Position.t>,       // All '|' positions
-  dividerIndex: array<Position.t>,     // All '=' positions
+  elementType: V2Types.nodeType,
+  priority: int,
+  canParse: TokenStream.t => bool,
+  parse: (ParseContext.t, TokenStream.t) => option<V2Types.astNode>,
 }
 ```
 
-### Key Operations
-
-#### Character Access
+Example — a `~~~` "wave divider":
 
 ```rescript
-// Get character at position
-let char = Grid.get(grid, Position.make(5, 10))
-
-// Get entire line
-let line = Grid.getLine(grid, 5)
-
-// Get range of characters
-let range = Grid.getRange(grid, row: 5, ~startCol=10, ~endCol=20)
-```
-
-#### Directional Scanning
-
-```rescript
-// Scan right until predicate fails
-let results = Grid.scanRight(grid, startPos, cell => {
-  switch cell {
-  | HLine | Corner => true  // Continue scanning
-  | _ => false              // Stop scanning
-  }
-})
-
-// Result: array<(Position.t, cellChar)>
-```
-
-#### Indexed Searches
-
-```rescript
-// Find all corners in O(1) time (using prebuilt index)
-let corners = grid.cornerIndex
-
-// Find all corners within a specific box
-let cornersInBox = Grid.findInRange(grid, Corner, boxBounds)
-```
-
-### When to Use Grid Operations
-
-- **Character lookup**: Use `get()` when you need a specific position
-- **Line processing**: Use `getLine()` for entire rows
-- **Directional tracing**: Use `scan*()` functions for boundary tracing
-- **Bulk searches**: Use indices for finding all instances of a character
-
----
-
-## Understanding the Shape Detector
-
-### Box Tracing Algorithm
-
-The core algorithm traces boxes by following their boundaries:
-
-```rescript
-let traceBox = (grid: Grid.t, topLeft: Position.t): Result.t<box, traceError> => {
-  // 1. Verify starting position is a corner '+'
-
-  // 2. Scan right along top edge
-  let topEdge = Grid.scanRight(grid, topLeft, isTopEdgeChar)
-
-  // 3. Extract box name if present
-  let name = extractBoxName(topEdge)
-
-  // 4. Scan down along right edge
-  let rightEdge = Grid.scanDown(grid, topRight, isRightEdgeChar)
-
-  // 5. Scan left along bottom edge
-  let bottomEdge = Grid.scanLeft(grid, bottomRight, isBottomEdgeChar)
-
-  // 6. Validate width match
-  if topWidth != bottomWidth {
-    return Error(MismatchedWidth({...}))
-  }
-
-  // 7. Scan up along left edge
-  let leftEdge = Grid.scanUp(grid, bottomLeft, isLeftEdgeChar)
-
-  // 8. Verify we returned to start position
-
-  // 9. Create and return box
-  Ok({
-    name,
-    bounds: Bounds.make(~top, ~left, ~bottom, ~right),
-    children: []
-  })
-}
-```
-
-### Hierarchy Construction
-
-```rescript
-let buildHierarchy = (boxes: array<box>): Result.t<array<box>, hierarchyError> => {
-  // Sort boxes by area (largest first)
-  let sorted = boxes->Belt.SortArray.stableSortBy((a, b) =>
-    compare(Bounds.area(b.bounds), Bounds.area(a.bounds))
-  )
-
-  // For each box, find its smallest containing parent
-  sorted->Belt.Array.forEach(box => {
-    let parent = sorted->Belt.Array.getBy(candidate =>
-      candidate !== box &&
-      Bounds.contains(candidate.bounds, box.bounds)
-    )
-
-    switch parent {
-    | Some(p) => p.children->Js.Array2.push(box)->ignore
-    | None => () // Root box
-    }
-  })
-
-  // Return only root boxes (no parent)
-  Ok(sorted->Belt.Array.keep(box => box.parent == None))
-}
-```
-
-### Key Insights
-
-1. **Spatial containment** determines hierarchy, not parsing order
-2. **Smallest containing box** is the immediate parent
-3. **Overlapping boxes** (neither contains the other) are errors
-4. **All errors are collected** before returning (no early stopping)
-
----
-
-## Understanding the Semantic Parser
-
-### Parser Registry System
-
-The Semantic Parser uses a priority-based registry to recognize different element types:
-
-```rescript
-type ElementParser.t = {
-  priority: int,                                  // Higher = checked first
-  canParse: string => bool,                       // Quick pattern check
-  parse: (string, Position.t, Bounds.t) => parseResult  // Full parsing
-}
-```
-
-### How Parsing Works
-
-```rescript
-let parse = (registry: ParserRegistry.t, content: string, position: Position.t, bounds: Bounds.t) => {
-  // Iterate parsers in priority order
-  let rec tryParsers = (parsers: array<ElementParser.t>) => {
-    switch parsers {
-    | [] => Text({content, position, align: Left, emphasis: false})  // Fallback
-    | [parser, ...rest] =>
-      if parser.canParse(content) {
-        switch parser.parse(content, position, bounds) {
-        | Some(element) => element
-        | None => tryParsers(rest)  // Parser declined, try next
-        }
-      } else {
-        tryParsers(rest)
-      }
-    }
-  }
-
-  tryParsers(registry.parsers)
-}
-```
-
-### Alignment Calculation
-
-```rescript
-let calculate = (content: string, position: Position.t, boxBounds: Bounds.t): alignment => {
-  let trimmed = content->Js.String2.trim
-  let contentStart = position.col
-  let contentEnd = contentStart + String.length(trimmed)
-
-  // Calculate space on left and right
-  let boxLeft = boxBounds.left + 1   // +1 to skip border
-  let boxRight = boxBounds.right - 1  // -1 to skip border
-  let boxWidth = boxRight - boxLeft
-
-  let leftSpace = contentStart - boxLeft
-  let rightSpace = boxRight - contentEnd
-
-  // Calculate ratios
-  let leftRatio = float_of_int(leftSpace) /. float_of_int(boxWidth)
-  let rightRatio = float_of_int(rightSpace) /. float_of_int(boxWidth)
-
-  // Determine alignment using thresholds
-  if leftRatio < 0.2 && rightRatio > 0.3 {
-    Left
-  } else if rightRatio < 0.2 && leftRatio > 0.3 {
-    Right
-  } else if Js.Math.abs_float(leftRatio -. rightRatio) < 0.15 {
-    Center
-  } else {
-    Left  // Default
-  }
-}
-```
-
----
-
-## Creating Custom Element Parsers
-
-### Step-by-Step Guide
-
-Let's create a custom parser for a "Badge" element with syntax `{badge: text}`.
-
-#### Step 1: Define the Element Type
-
-First, add your element to the `element` variant in `Types.res`:
-
-```rescript
-type element =
-  | Box({...})
-  | Button({...})
-  | Input({...})
-  // ... existing elements ...
-  | Badge({
-      text: string,
-      position: Position.t,
-      align: alignment,
-    })
-```
-
-#### Step 2: Create the Parser Module
-
-Create `src/parser/Semantic/Elements/BadgeParser.res`:
-
-```rescript
-module BadgeParser = {
-  open Types
-
-  // Pattern: {badge: some text}
-  let pattern = %re("/{badge:\s*([^}]+)}/")
-
-  let make = (): ElementParser.t => {
-    priority: 75,  // Between links (80) and emphasis (70)
-
-    canParse: content => {
-      Js.Re.test_(pattern, content)
-    },
-
-    parse: (content, position, boxBounds) => {
-      switch Js.Re.exec_(pattern, content) {
-      | Some(result) => {
-          let captures = Js.Re.captures(result)
-          switch captures[1] {
-          | Some(textCapture) => {
-              let text = textCapture
-                ->Js.Nullable.toOption
-                ->Belt.Option.getExn
-                ->Js.String2.trim
-
-              let align = AlignmentCalc.calculate(content, position, boxBounds)
-
-              Some(Badge({
-                text,
-                position,
-                align,
-              }))
-            }
-          | None => None
-          }
-        }
-      | None => None
-      }
-    }
-  }
-}
-```
-
-#### Step 3: Register the Parser
-
-In `ParserRegistry.res`, add a factory function:
-
-```rescript
-module ParserRegistry = {
-  // ... existing code ...
-
-  let makeBadgeParser = (): ElementParser.t => {
-    BadgeParser.make()
-  }
-
-  let makeDefaultRegistry = (): t => {
-    let registry = make()
-
-    register(registry, makeButtonParser())
-    register(registry, makeInputParser())
-    register(registry, makeLinkParser())
-    register(registry, makeCheckboxParser())
-    register(registry, makeBadgeParser())  // Add your parser
-    register(registry, makeEmphasisParser())
-    register(registry, makeTextParser())
-
-    registry
-  }
-}
-```
-
-#### Step 4: Test Your Parser
-
-Create `src/parser/Semantic/Elements/__tests__/BadgeParser.test.res`:
-
-```rescript
-open Jest
-open Expect
-
-describe("BadgeParser", () => {
-  let parser = BadgeParser.make()
-  let dummyPosition = Position.make(0, 0)
-  let dummyBounds = Bounds.make(~top=0, ~left=0, ~bottom=5, ~right=30)
-
-  test("recognizes badge syntax", () => {
-    let content = "{badge: Admin}"
-    expect(parser.canParse(content))->toBe(true)
-  })
-
-  test("parses badge text correctly", () => {
-    let content = "{badge: Premium User}"
-
-    switch parser.parse(content, dummyPosition, dummyBounds) {
-    | Some(Badge({text, position, align})) => {
-        expect(text)->toBe("Premium User")
-        expect(position)->toEqual(dummyPosition)
-      }
-    | _ => fail("Expected Badge element")
-    }
-  })
-
-  test("handles whitespace in badge text", () => {
-    let content = "{badge:   Whitespace   }"
-
-    switch parser.parse(content, dummyPosition, dummyBounds) {
-    | Some(Badge({text})) => expect(text)->toBe("Whitespace")
-    | _ => fail("Expected Badge element")
-    }
-  })
-
-  test("rejects invalid syntax", () => {
-    let content = "{badge no colon}"
-    expect(parser.canParse(content))->toBe(false)
-  })
-})
-```
-
-#### Step 5: Document Your Parser
-
-Add documentation to your module:
-
-```rescript
-/**
- * BadgeParser recognizes badge elements with syntax: {badge: text}
- *
- * Examples:
- * - {badge: Admin}
- * - {badge: Premium User}
- * - {badge: VIP}
- *
- * Priority: 75 (between links and emphasis)
- *
- * Returns: Badge({text, position, align})
- */
-module BadgeParser = {
-  // ... implementation
-}
-```
-
-### Advanced Parser Features
-
-#### Context-Aware Parsing
-
-Sometimes you need context beyond the current line:
-
-```rescript
-let parse = (content, position, boxBounds, ~context: parseContext) => {
-  // Access grid for multi-line patterns
-  let grid = context.grid
-
-  // Check next line for continuation
-  let nextLine = Grid.getLine(grid, position.row + 1)
-
-  // ... use context for advanced parsing
-}
-```
-
-#### Multi-Line Element Parsing
-
-For elements spanning multiple lines:
-
-```rescript
-let parseMultiLine = (grid, startPos, bounds) => {
-  let lines = []
-  let currentRow = ref(startPos.row)
-
-  while currentRow.contents <= bounds.bottom - 1 {
-    switch Grid.getLine(grid, currentRow.contents) {
-    | Some(line) => {
-        lines->Js.Array2.push(line)->ignore
-        currentRow := currentRow.contents + 1
-      }
-    | None => break
-    }
-  }
-
-  // Process accumulated lines
-  processLines(lines)
-}
-```
-
----
-
-## Extension Points
-
-### 1. Element Parser Registry
-
-**Location**: `src/parser/Semantic/ParserRegistry.res`
-
-**What You Can Extend**:
-- Add new element types
-- Change parser priority order
-- Create specialized registries for different contexts
-
-**Example**: Creating a minimal registry for testing:
-
-```rescript
-let makeMinimalRegistry = (): t => {
-  let registry = make()
-  register(registry, makeButtonParser())
-  register(registry, makeTextParser())
-  registry
-}
-```
-
-### 2. Alignment Calculation
-
-**Location**: `src/parser/Semantic/AlignmentCalc.res`
-
-**What You Can Extend**:
-- Custom alignment strategies
-- Element-specific alignment rules
-
-**Example**: Custom alignment for code blocks (always left):
-
-```rescript
-type alignmentStrategy =
-  | RespectPosition     // Buttons, links
-  | AlwaysLeft         // Text, code blocks
-  | AlwaysCenter       // Titles, headers
-
-let calculateWithStrategy = (content, position, bounds, strategy) => {
-  switch strategy {
-  | AlwaysLeft => Left
-  | AlwaysCenter => Center
-  | RespectPosition => calculate(content, position, bounds)
-  }
-}
-```
-
-### 3. Error Message Templates
-
-**Location**: `src/parser/Errors/ErrorMessages.res`
-
-**What You Can Extend**:
-- Custom error messages
-- Localization (different languages)
-- Enhanced suggestions
-
-**Example**: Adding a custom error type:
-
-```rescript
-type errorCode =
-  | UncloseBox({...})
-  | MismatchedWidth({...})
-  // ... existing errors ...
-  | InvalidBadgeSyntax({
-      position: Position.t,
-      found: string,
-    })
-
-let getTemplate = (code: errorCode): template => {
-  switch code {
-  | InvalidBadgeSyntax({position, found}) => {
-      title: "Invalid badge syntax",
-      message: `Found "${found}" at row ${Int.toString(position.row + 1)}, but badge syntax requires {badge: text}`,
-      solution: "Use the correct syntax: {badge: your text here}",
-    }
-  // ... other error templates
-  }
-}
-```
-
-### 4. Box Tracing Validation
-
-**Location**: `src/parser/Detector/BoxTracer.res`
-
-**What You Can Extend**:
-- Custom box border characters
-- Alternative box styles
-- Additional validation rules
-
-**Example**: Supporting rounded corners with parentheses:
-
-```rescript
-let isCornerChar = (char: cellChar): bool => {
-  switch char {
-  | Corner => true                    // Standard '+'
-  | Char("(") | Char(")") => true    // Rounded corners
-  | _ => false
-  }
-}
-```
-
-### 5. AST Post-Processing
-
-**Location**: `src/parser/Semantic/ASTBuilder.res`
-
-**What You Can Extend**:
-- AST transformation passes
-- Validation rules
-- Optimization passes
-
-**Example**: Adding auto-ID generation:
-
-```rescript
-let generateMissingIds = (ast: ast): ast => {
-  let idCounter = ref(0)
-
-  let rec processElement = (element: element): element => {
-    switch element {
-    | Button({id: "", text, position, align}) => {
-        idCounter := idCounter.contents + 1
-        Button({
-          id: `btn_${Int.toString(idCounter.contents)}`,
-          text,
-          position,
-          align,
-        })
-      }
-    | Box({name, bounds, children}) =>
-        Box({name, bounds, children: children->Belt.Array.map(processElement)})
-    | other => other
-    }
-  }
-
-  {
-    scenes: ast.scenes->Belt.Array.map(scene => {
-      {
-        ...scene,
-        elements: scene.elements->Belt.Array.map(processElement)
-      }
-    })
-  }
-}
-```
-
----
-
-## Error System Extension
-
-### Adding New Error Types
-
-#### Step 1: Define Error Variant
-
-In `ErrorTypes.res`:
-
-```rescript
-type errorCode =
-  | UncloseBox({...})
-  // ... existing errors ...
-  | DuplicateElementId({
-      id: string,
-      firstPosition: Position.t,
-      secondPosition: Position.t,
-    })
-```
-
-#### Step 2: Determine Severity
-
-```rescript
-let getSeverity = (code: errorCode): severity => {
-  switch code {
-  | DuplicateElementId(_) => Warning  // Warning, not fatal
-  | UncloseBox(_) => Error            // Fatal error
-  // ... other cases
-  }
-}
-```
-
-#### Step 3: Create Message Template
-
-In `ErrorMessages.res`:
-
-```rescript
-let getTemplate = (code: errorCode): template => {
-  switch code {
-  | DuplicateElementId({id, firstPosition, secondPosition}) => {
-      title: "Duplicate element ID",
-      message: `The ID "${id}" is used in multiple places:\n` ++
-               `• First: row ${Int.toString(firstPosition.row + 1)}, col ${Int.toString(firstPosition.col + 1)}\n` ++
-               `• Second: row ${Int.toString(secondPosition.row + 1)}, col ${Int.toString(secondPosition.col + 1)}`,
-      solution: "Each element must have a unique ID. Rename one of them.",
-    }
-  // ... other cases
-  }
-}
-```
-
-#### Step 4: Use in Parser
-
-```rescript
-let validateUniqueIds = (elements: array<element>): Result.t<unit, ParseError.t> => {
-  let idMap = Belt.Map.String.empty
-
-  let rec check = (elements) => {
-    elements->Belt.Array.forEach(element => {
-      switch element {
-      | Button({id, position}) | Input({id, position}) => {
-          switch Belt.Map.String.get(idMap, id) {
-          | Some(firstPosition) =>
-              return Error(ParseError.make(
-                DuplicateElementId({id, firstPosition, secondPosition: position}),
-                grid
-              ))
-          | None =>
-              idMap = Belt.Map.String.set(idMap, id, position)
-          }
-        }
-      | Box({children}) => check(children)
-      | _ => ()
-      }
-    })
-  }
-
-  check(elements)
-  Ok()
-}
-```
-
----
-
-## Testing Your Extensions
-
-### Unit Testing Strategy
-
-```rescript
-// Test the parser in isolation
-describe("BadgeParser", () => {
-  test("canParse returns true for valid syntax", () => {
-    let parser = BadgeParser.make()
-    expect(parser.canParse("{badge: Text}"))->toBe(true)
-  })
-
-  test("parse extracts text correctly", () => {
-    let parser = BadgeParser.make()
-    let result = parser.parse(
-      "{badge: Admin}",
-      Position.make(0, 0),
-      Bounds.make(~top=0, ~left=0, ~bottom=5, ~right=30)
-    )
-
-    switch result {
-    | Some(Badge({text})) => expect(text)->toBe("Admin")
-    | _ => fail("Expected Badge")
-    }
-  })
-})
-```
-
-### Integration Testing
-
-```rescript
-// Test end-to-end parsing
-describe("Badge element integration", () => {
-  test("parses badge in wireframe", () => {
-    let wireframe = `
-+------------------+
-| {badge: Admin}   |
-+------------------+
-`
-
-    let result = WyreframeParser.parse(wireframe, None)
-
-    switch result {
-    | Ok(ast) => {
-        let scene = ast.scenes[0]
-        let hasBadge = scene.elements->Belt.Array.some(el => {
-          switch el {
-          | Badge(_) => true
-          | _ => false
-          }
-        })
-        expect(hasBadge)->toBe(true)
-      }
-    | Error(errors) => fail("Expected successful parse")
-    }
-  })
-})
-```
-
-### Property-Based Testing
-
-```rescript
-open FastCheck
-
-describe("Badge parser properties", () => {
-  test("parsing is deterministic", () => {
-    let arbBadge = fc.tuple(
-      fc.string({minLength: 1, maxLength: 20})
-    )->fc.map(text => `{badge: ${text}}`)
-
-    fc.assert_(
-      fc.property(arbBadge, content => {
-        let parser = BadgeParser.make()
-        let result1 = parser.parse(content, dummyPos, dummyBounds)
-        let result2 = parser.parse(content, dummyPos, dummyBounds)
-        deepEqual(result1, result2)
-      })
-    )
-  })
-})
-```
-
----
-
-## Performance Considerations
-
-### Optimization Guidelines
-
-#### 1. Use Prebuilt Indices
-
-```rescript
-// ❌ Inefficient: Scanning entire grid
-let findAllCorners = (grid) => {
-  let corners = []
-  for row in 0 to grid.height - 1 {
-    for col in 0 to grid.width - 1 {
-      switch Grid.get(grid, Position.make(row, col)) {
-      | Some(Corner) => corners->Js.Array2.push(Position.make(row, col))->ignore
-      | _ => ()
-      }
-    }
-  }
-  corners
+// WaveDividerParser.res
+let canParse = (stream: TokenStream.t): bool => {
+  // Probe only — registry restores the cursor afterwards
+  let tok = TokenStream.peek(stream)
+  tok.kind == Tilde  // simplified
 }
 
-// ✅ Efficient: Use prebuilt index (O(1))
-let findAllCorners = (grid) => {
-  grid.cornerIndex
-}
-```
-
-#### 2. Minimize Regex Compilation
-
-```rescript
-// ❌ Compiles regex on every call
-let canParse = (content) => {
-  Js.Re.test_(%re("/pattern/"), content)
-}
-
-// ✅ Compile once at module level
-let pattern = %re("/pattern/")
-
-let canParse = (content) => {
-  Js.Re.test_(pattern, content)
-}
-```
-
-#### 3. Use Belt Collections
-
-```rescript
-// ❌ Using JavaScript arrays
-let filtered = array->Js.Array2.filter(predicate)
-
-// ✅ Using Belt for better performance
-let filtered = array->Belt.Array.keep(predicate)
-```
-
-#### 4. Lazy Evaluation for Expensive Operations
-
-```rescript
-// Only compute alignment if element actually uses it
-let parse = (content, position, bounds) => {
-  let align = lazy(AlignmentCalc.calculate(content, position, bounds))
-
-  Some(Badge({
-    text,
-    position,
-    align: Lazy.force(align),  // Only computed if Badge is created
+let parse = (ctx: ParseContext.t, stream: TokenStream.t): option<V2Types.astNode> => {
+  let start = TokenStream.position(stream)
+  // ...consume tokens, or return None to let lower priorities try...
+  Some(V2Types.DividerNode({
+    location: {start, end_: TokenStream.position(stream)},
+    style: V2Types.Normal,
+    id: None,
+    label: None,
   }))
 }
+
+let make = (): V2ElementParser.t =>
+  V2ElementParser.make(
+    ~elementType=V2Types.Divider,
+    ~priority=42, // between Divider (40) and Divider ID (45)
+    ~canParse,
+    ~parse,
+  )
 ```
 
-### Benchmarking Your Parser
+Register it (see `V2Parser.makeRegistry` for the built-in registration order):
 
 ```rescript
-let benchmarkParser = (parser: ElementParser.t, samples: int) => {
-  let testContent = "{badge: Test}"
-  let position = Position.make(0, 0)
-  let bounds = Bounds.make(~top=0, ~left=0, ~bottom=5, ~right=30)
-
-  let start = Js.Date.now()
-
-  for _ in 0 to samples - 1 {
-    let _ = parser.parse(testContent, position, bounds)
-  }
-
-  let end = Js.Date.now()
-  let duration = end -. start
-
-  Js.Console.log(`Parsed ${Int.toString(samples)} times in ${Float.toString(duration)}ms`)
-  Js.Console.log(`Average: ${Float.toString(duration /. float_of_int(samples))}ms per parse`)
-}
+let reg = V2ParserRegistry.make()
+// ...register built-ins...
+V2ParserRegistry.register(reg, WaveDividerParser.make())   // sorted by priority automatically
+V2ParserRegistry.unregister(reg, V2Types.Divider)          // remove by element type
 ```
+
+Guidelines:
+
+- Report problems through `ParseContext.addError` / `addWarning` — don't throw.
+- Heuristic-driven warnings must carry a `ruleId` (add the rule to `Heuristics.Rule`).
+- Keep recovery row-bounded where possible (see [Error Recovery](#error-recovery)).
+- Add boundary tests for any new threshold (just-inside / exact / just-outside).
 
 ---
 
-## Common Patterns and Best Practices
+## Heuristics
 
-### Pattern 1: Progressive Enhancement
-
-Start with basic parsing, add features incrementally:
+All tolerances live in `utils/Heuristics.res`:
 
 ```rescript
-// Version 1: Simple badge
-| Badge({text, position, align})
-
-// Version 2: Add color
-| Badge({text, color: option<string>, position, align})
-
-// Version 3: Add icon
-| Badge({text, color: option<string>, icon: option<string>, position, align})
-```
-
-### Pattern 2: Composition Over Modification
-
-Don't modify core types; compose them:
-
-```rescript
-// ❌ Modifying core Button type
-type element =
-  | Button({id, text, position, align, customProp: option<string>})
-
-// ✅ Wrapping with custom data
-type customElement =
-  | CoreElement(element)
-  | EnhancedButton({
-      button: element,  // Original button
-      customProp: string,
-    })
-```
-
-### Pattern 3: Error Collection
-
-Always collect multiple errors:
-
-```rescript
-let validateElements = (elements: array<element>): Result.t<unit, array<ParseError.t>> => {
-  let errors = []
-
-  elements->Belt.Array.forEach(element => {
-    // Validation 1
-    switch validateId(element) {
-    | Error(e) => errors->Js.Array2.push(e)->ignore
-    | Ok() => ()
-    }
-
-    // Validation 2
-    switch validateAlignment(element) {
-    | Error(e) => errors->Js.Array2.push(e)->ignore
-    | Ok() => ()
-    }
-  })
-
-  if Array.length(errors) > 0 {
-    Error(errors)
-  } else {
-    Ok()
-  }
+let default: t = {
+  containerColumnTolerance: 1,
+  containerWidthTolerance: 2,
+  radioHorizontalGap: 6,
+  radioVerticalColumnTolerance: 1,
+  radioMaxBlankRows: 0,
+  centerSymmetryThreshold: 0.15,
+  rightAlignThreshold: 0.10,
+  dividerMinRun: 3,
+  nearMissTokenDistance: 1,
 }
 ```
 
-### Pattern 4: Type-Safe Element Matching
-
-Use exhaustive pattern matching:
-
-```rescript
-let processElement = (element: element): processedElement => {
-  switch element {
-  | Box({name, bounds, children}) => processBox(name, bounds, children)
-  | Button({id, text, position, align}) => processButton(id, text, position, align)
-  | Input({id, placeholder, position}) => processInput(id, placeholder, position)
-  | Link({id, text, position, align}) => processLink(id, text, position, align)
-  | Checkbox({checked, label, position}) => processCheckbox(checked, label, position)
-  | Text({content, emphasis, position, align}) => processText(content, emphasis, position, align)
-  | Divider({position}) => processDivider(position)
-  | Row({children, align}) => processRow(children, align)
-  | Section({name, children}) => processSection(name, children)
-  // Compiler ensures all cases are handled
-  }
-}
-```
-
-### Pattern 5: Documentation-Driven Development
-
-Document before implementing:
-
-```rescript
-/**
- * SpecialParser recognizes special syntax: <<<content>>>
- *
- * Syntax:
- * - <<<text>>> - Creates a special element
- * - <<<text|variant>>> - With variant
- * - <<<text|variant|icon>>> - With variant and icon
- *
- * Priority: 65
- *
- * Examples:
- * ```
- * <<<Important>>>
- * <<<Warning|alert>>>
- * <<<Info|info|🛈>>>
- * ```
- *
- * Returns:
- * - Some(Special({...})) on success
- * - None if pattern doesn't match
- */
-module SpecialParser = {
-  // Implementation follows documentation
-}
-```
+- User overrides arrive as `Heuristics.partial` (all-optional); `applyPartial` merges them over `default`.
+- Stable rule IDs live in `Heuristics.Rule` (e.g. `container.wallAlignment`, `radioGrouping.vertical`, `text.center`, `nearMissPatterns`, `errorRecovery.containerSync`). Heuristic warnings reference these so users can trace *why* a tolerance fired.
+- Changing a default requires updating the golden test fixtures in the same change (REQ-23.5).
 
 ---
 
-## Quick Reference
+## Error Recovery
 
-### Creating a New Element Parser Checklist
+Default mode is recovering: errors are recorded, an `ErrorNode` (or recovery flag) marks the region, and parsing continues. Named synchronization rules:
 
-- [ ] Add element variant to `Types.res`
-- [ ] Create parser module in `Semantic/Elements/`
-- [ ] Implement `priority`, `canParse`, `parse`
-- [ ] Define regex pattern at module level
-- [ ] Use `AlignmentCalc` for alignment
-- [ ] Register parser in `ParserRegistry.makeDefaultRegistry()`
-- [ ] Write unit tests with ≥90% coverage
-- [ ] Write integration test with real wireframe
-- [ ] Add documentation with examples
-- [ ] Benchmark if performance-critical
+| Error | Sync rule |
+|-------|-----------|
+| `UnclosedInput` | Row-bounded — recovery never crosses the row |
+| `UnclosedString` | Bounded at EOF/block boundary |
+| `UnclosedContainer` | `errorRecovery.containerSync` — body rows are not leaked as normal siblings |
+| `NestedBlockDeclaration` | Rewind to the nested header row; reparse as a new top-level block (pipes treated as wall noise, bounded by the outer container's bottom border) |
+| `MaxDepthExceeded` | Offending container parses as empty, `containsErrorRecovery: true`, siblings continue |
 
-### Extension Point Summary
+`strict: true` flips the contract: first error halts parsing and all errors report `recoverable: false`.
 
-| Extension Point | Location | Difficulty | Common Use Case |
-|----------------|----------|------------|-----------------|
-| Element Parser | `Semantic/Elements/` | Easy | New UI elements |
-| Alignment Strategy | `AlignmentCalc.res` | Easy | Custom positioning |
-| Error Messages | `ErrorMessages.res` | Easy | Localization |
-| Box Validation | `BoxTracer.res` | Medium | Alternative box styles |
-| AST Transformation | `ASTBuilder.res` | Medium | Post-processing |
-| Grid Operations | `Grid.res` | Hard | New scanning patterns |
+---
 
-### Performance Targets
+## Layout Inference
 
-| Operation | Target | Measurement |
-|-----------|--------|-------------|
-| Grid construction | <5ms per 1000 lines | `benchmarkGrid()` |
-| Box tracing | <1ms per box | `benchmarkBoxTracer()` |
-| Element parsing | <0.1ms per element | `benchmarkParser()` |
-| Full parse | <50ms for 100 lines | `benchmarkEndToEnd()` |
+`layout/LayoutInferrer.res` derives arrangement from element start rows:
+
+- Same start row → `Row` group; consecutive different rows → `Column` group.
+- A container's start row is its top-border row.
+- Groups are `{ direction, start, end_, startRow }` — index ranges into `parent.children`. **Never duplicate child nodes.**
+- Spacing affects only the optional `distribution` field, never direction.
+
+`layout/RadioGrouper.res` runs before layout inference and assigns radio `group` names using the radio heuristics (vertical runs, same-row proximity, same container).
+
+---
+
+## Validator
+
+`validator/Validator.res` runs once per block after parsing and owns **cross-cutting** checks only (per-element checks belong in element parsers):
+
+- `DuplicatePropName` — duplicate `@props` entries (last wins)
+- `DuplicateContainerId` — same `#id` on two containers
+- `UnknownPropReference` — `${name}` not declared in `@props`
+- `MultipleRadiosSelected` — more than one `(*)` in one group
+
+---
+
+## Mutability Policy
+
+Only two surfaces are mutable:
+
+1. **`ParseContext`** — error/warning accumulators, recovery bookkeeping (e.g. `pendingNestedBlockRow`).
+2. **`TokenStream` cursor** — advanced by `next`, checkpointed with `save`/`restore`.
+
+Everything else — tokens, the `GridIndex`, and all AST records — is immutable after construction. JS-facing entry points defensively normalize partial options (`V2Parser.normalizeOptions`) so `undefined` fields from JavaScript callers can't crash ReScript code.
+
+---
+
+## Emoji Registry
+
+`registry/EmojiRegistry.res` maps shortcodes to emoji (14 built-ins).
+
+```rescript
+EmojiRegistry.register("rocket", "🚀")  // global registration
+EmojiRegistry.reset()                    // restore pristine defaults
+```
+
+Per-parse overrides (`parseOptions.emojiRegistry`) are consulted first and **never mutate global state** — `lookupWithOverride` falls back to the module registry. Defaults are rebuilt per `reset()` call so a polluted dict can never become the new baseline.
+
+---
+
+## Testing
+
+```bash
+npm test              # full suite (V1 + V2)
+npm run test:watch
+npm run test:coverage
+```
+
+- V2 tests live in `src/parser/v2/__tests__/` (ReScript, `rescript-vitest`), including `Regressions*_test.res` suites accumulated from automated review rounds.
+- TypeScript-facing behavior (package exports, `.d.ts` correctness) is covered by `*.test.ts` files.
+- Heuristic thresholds require **boundary fixtures**: just-inside, exact, and just-outside the threshold (REQ-23.4).
+- Build with `npm run build` (ReScript → TypeScript → typecheck) before running tests on parser changes.
+
+See [testing.md](testing.md) for conventions.
+
+---
+
+## Performance Targets
+
+Per REQ-19, on the reference platform (Apple Silicon or ≥2.5 GHz x86-64, ≥8 GB RAM, Node ≥20, single-threaded):
+
+| Input | Target (best-of-5 wall time) |
+|-------|------------------------------|
+| ≤ 100 lines | < 50ms |
+| ≤ 1000 lines | < 500ms |
+| Memory | peak `heapUsed` delta ≤ 10× input bytes |
+
+If a CI machine can't meet the baseline, adjust the threshold in `vitest.config` with a comment linking to the requirement — never silently relax it.
+
+---
+
+## Legacy V1 Architecture
+
+The V1 parser (`src/parser/`, main `wyreframe` export) uses a 3-stage pipeline:
+
+1. **Grid Scanner** — ASCII text → 2D character grid
+2. **Shape Detector** — box tracing, nesting/hierarchy construction
+3. **Semantic Parser** — pluggable element parsers → V1 AST
+
+V1 additionally owns everything V2 does not yet cover:
+
+- **Renderer** (`src/renderer/`) — AST → DOM with CSS scene transitions
+- **Interaction DSL** (`Interactions/`) — `@click -> goto(...)` etc.
+- **Auto-Fix** (`Fixer/`) — formatting auto-correction (`fix`, `fixOnly`)
+
+V1 element parsers register through the V1 registry in `Semantic/`; the V1 extension workflow mirrors the V2 one but uses grid positions instead of token streams. V1 code is in maintenance mode — prefer building new features against V2.
+
+---
+
+## V1/V2 Migration Path
+
+| Phase | Description | Status |
+|-------|-------------|--------|
+| 1 | V2 parser developed in isolation (`src/parser/v2/`) | ✅ Done |
+| 2 | Side-by-side testing — both parsers, same input, compare | In progress |
+| 3 | Runtime feature flag selects V1 or V2 | Planned |
+| 4 | V2 default, V1 fallback | Planned |
+| 5 | V1 deprecation and removal | Planned |
+
+AST conversion helpers (`v2ToV1` / `v1ToV2`) may be provided for gradual migration; until then the two ASTs are independent types.
 
 ---
 
 ## Getting Help
 
-### Resources
-
-- **Design Document**: `.claude/specs/parser-refactor/design.md` - Full architecture
-- **Requirements**: `.claude/specs/parser-refactor/requirements.md` - All requirements
-- **Type Definitions**: `src/parser/Core/Types.res` - Core types
-- **Examples**: `__tests__/fixtures/` - Real wireframe examples
-
-### Common Issues
-
-**Q: My parser isn't being called**
-A: Check the priority. Higher numbers are checked first. Ensure `canParse()` returns true.
-
-**Q: How do I access the grid from a parser?**
-A: Pass grid through parseContext parameter. Modify `ElementParser.t` signature if needed.
-
-**Q: How do I handle multi-line elements?**
-A: Use `Grid.getLine()` and `Grid.getRange()` to read multiple rows. See pattern examples above.
-
-**Q: My tests are failing with type errors**
-A: Run `npm run res:clean && npm run res:build` to rebuild ReScript output.
+- [Syntax v2.3 Reference](./syntax-v2.md)
+- [API Reference](./api.md)
+- [Type Definitions](./types.md)
+- Design documents: `.claude/specs/syntax-v2-parser/{requirements,design,tasks}.md`
+- **Issues**: [GitHub Issues](https://github.com/wickedev/wyreframe/issues)
 
 ---
 
-## Implementation Roadmap
-
-This section outlines the phased approach to implementing and extending the parser.
-
-### Phase 1: Core Infrastructure
-- `Grid`, `Position`, `Bounds` classes
-- `GridScanner` implementation
-- Basic unit tests
-
-### Phase 2: Shape Detection
-- `BoxTracer` - Box boundary tracing
-- `DividerDetector` - Divider detection
-- `HierarchyBuilder` - Nesting relationships
-- Integration tests for various box patterns
-
-### Phase 3: Semantic Parsing
-- `ParserRegistry` implementation
-- Element parsers (Button, Input, Link, Checkbox, etc.)
-- `AlignmentCalc` implementation
-- `ASTBuilder` implementation
-
-### Phase 4: Error System
-- `ParseError` class
-- Error message templates
-- `ErrorContextBuilder` implementation
-- Error message tests
-
-### Phase 5: Integration
-- `WireframeParser` unified class
-- Backward compatibility with existing API
-- Performance benchmarks
-- Documentation
-
-### Phase 6: Migration
-- Parallel execution testing with legacy parser
-- Result comparison validation
-- Gradual transition
-- Legacy code removal
-
----
-
-## Conclusion
-
-The Wyreframe parser is designed to be extended. The 3-stage architecture provides clear separation of concerns, and the plugin-based element parser system makes adding new features straightforward.
-
-Key takeaways:
-
-1. **Understand the stages**: Grid → Shapes → Semantics
-2. **Use the registry**: Don't modify core parser logic
-3. **Test thoroughly**: Unit, integration, and property tests
-4. **Optimize wisely**: Use indices, lazy evaluation, Belt collections
-5. **Document generously**: Help the next developer (or future you)
-
-Happy parsing!
-
----
-
-**Document Version**: 0.4.3
-**Last Updated**: 2025-12-27
+**Version**: 0.4.3
+**Last Updated**: 2026-06-11
 **License**: GPL-3.0
-**Feedback**: Please submit issues or suggestions to [GitHub](https://github.com/wickedev/wyreframe/issues)

@@ -4,7 +4,7 @@
 **Component**: Parser Architecture Refactoring to ReScript
 **Version**: 0.1.0
 **Date**: 2025-12-22
-**Status**: In Progress
+**Status**: Historical — covers the **V1 parser** refactoring. The V2 parser (syntax v2.3) test strategy lives in `.claude/specs/syntax-v2-parser/` and [testing.md](testing.md).
 
 ---
 

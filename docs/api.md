@@ -2,39 +2,43 @@
 
 **Version**: 0.4.3
 **Language**: ReScript (compiled to JavaScript/TypeScript)
-**Last Updated**: 2025-12-27
+**Last Updated**: 2026-06-11
 
 ## Table of Contents
 
 - [Overview](#overview)
 - [Installation](#installation)
-- [Quick Start](#quick-start)
-- [Core API](#core-api)
-- [Render Options](#render-options)
-- [Scene Manager](#scene-manager)
-- [Auto-Fix API](#auto-fix-api)
-- [Error Handling](#error-handling)
-- [TypeScript Integration](#typescript-integration)
-- [ReScript API](#rescript-api)
+- [V2 Parser API](#v2-parser-api)
+  - [Quick Start](#quick-start)
+  - [`parse`](#parsesource-string-options-parseoptions-parseresult)
+  - [`parseWireframe`](#parsewireframesource-string-parseresult)
+  - [Parse Options](#parse-options)
+  - [Parse Result](#parse-result)
+  - [Error Handling](#error-handling)
+  - [Heuristics Overrides](#heuristics-overrides)
+  - [Custom Emoji Shortcodes](#custom-emoji-shortcodes)
+  - [TypeScript Integration](#typescript-integration)
+  - [ReScript API](#rescript-api)
+- [Legacy V1 API](#legacy-v1-api)
+  - [Core Functions](#core-functions-v1)
+  - [Render Options](#render-options-v1)
+  - [Scene Manager](#scene-manager-v1)
+  - [Auto-Fix API](#auto-fix-api-v1)
 
 ---
 
 ## Overview
 
-Wyreframe is a type-safe library for converting ASCII wireframes into working HTML/UI with scene management and interactions. The library implements a 3-stage parsing pipeline:
+Wyreframe converts ASCII wireframes into structured ASTs and (via the V1 renderer) into working HTML/UI.
 
-1. **Grid Scanner**: Converts ASCII text to a 2D character grid
-2. **Shape Detector**: Identifies boxes, dividers, and nesting relationships
-3. **Semantic Parser**: Recognizes UI elements and generates AST
+Two parsers ship side by side:
 
-### Key Features
+| Parser | Import | Syntax | Status |
+|--------|--------|--------|--------|
+| **V2** | `wyreframe/parser/v2` | [Syntax v2.3](syntax-v2.md) | Current — parser only |
+| V1 | `wyreframe` (main), `wyreframe/parser` | V1 syntax | Legacy — powers rendering + Interaction DSL |
 
-- **Type Safety**: Built with ReScript, compiled to TypeScript-friendly JavaScript
-- **Comprehensive Error Messages**: Natural language errors with code snippets and solutions
-- **Extensible**: Plugin-based element parser system
-- **Auto-Fix**: Automatically correct common wireframe formatting issues
-- **Scene Management**: Multi-screen prototypes with navigation and transitions
-- **Device Support**: Responsive previews for mobile, tablet, and desktop
+> Rendering (`createUI`, `render`, `SceneManager`) currently consumes V1 ASTs only. Use the V2 parser for syntax v2.3 analysis, tooling, and code generation; use the V1 surface when you need live HTML output.
 
 ---
 
@@ -46,270 +50,287 @@ npm install wyreframe
 
 ---
 
-## Quick Start
+## V2 Parser API
 
-### Basic Usage
+### Quick Start
 
 ```typescript
-import { createUI } from 'wyreframe';
+import { parse } from 'wyreframe/parser/v2';
 
-const wireframe = `
+const result = parse(`
 @scene: login
-@title: Login Screen
 @device: mobile
 
 +---------------------------+
-|       'Welcome'           |
-|                           |
-|  #email                   |
-|  #password                |
-|                           |
-|       [ Login ]           |
+|         "Login"           |
+|  [__email____________]    |
+|       [ Sign In ]         |
 +---------------------------+
-
-#email:
-  placeholder: "Email"
-
-#password:
-  placeholder: "Password"
-
-[Login]:
-  variant: primary
-  @click -> goto(dashboard, slide-left)
-`;
-
-const result = createUI(wireframe);
+`);
 
 if (result.success) {
-  document.getElementById('app').appendChild(result.root);
-  result.sceneManager.goto('login');
-} else {
-  console.error('Parsing errors:', result.errors);
+  for (const block of result.blocks) {
+    console.log(block.TAG, block._0.slug);
+  }
 }
 ```
 
----
+### `parse(source: string, options?: ParseOptions): ParseResult`
 
-## Core API
-
-### `parse(text: string): ParseResult`
-
-Parse mixed text containing wireframe and interactions.
+Parse syntax v2.3 source into an AST.
 
 **Parameters:**
-- `text` (string): Text containing ASCII wireframe and/or interaction DSL
+- `source` (string): UTF-8 wireframe text (LF / CRLF / CR line endings supported)
+- `options` (ParseOptions, optional): partial options; missing fields use defaults
 
-**Returns:**
+**Returns:** [`ParseResult`](#parse-result). Never throws — all problems are reported via `errors` / `warnings`.
+
+### `parseWireframe(source: string): ParseResult`
+
+Convenience wrapper — `parse(source)` with default options.
+
+### Module Exports
+
 ```typescript
-type ParseResult =
-  | { success: true; ast: AST; warnings: ParseError[] }
-  | { success: false; errors: ParseError[] };
+import {
+  parse,
+  parseWireframe,
+  version,        // "2.3.0" — spec version implemented
+  implementation, // "rescript-v2"
+  defaultOptions, // ParseOptions defaults
+} from 'wyreframe/parser/v2';
 ```
 
-**Example:**
+### Parse Options
 
 ```typescript
-import { parse } from 'wyreframe';
-
-const result = parse(wireframe);
-
-if (result.success) {
-  console.log('Parsed successfully');
-  console.log('Scenes:', result.ast.scenes.length);
-  console.log('Warnings:', result.warnings);
-} else {
-  console.error('Errors:', result.errors);
+interface ParseOptions {
+  /** Promote recoverable errors to fatal and halt on the first error. Default: false */
+  strict?: boolean;
+  /** Tab expansion width for visual-column calculation. Default: 4 */
+  tabSize?: number;
+  /** Maximum container nesting depth. Default: 10 */
+  maxDepth?: number;
+  /** Partial heuristics override; unspecified fields keep defaults */
+  heuristics?: HeuristicsPartial;
+  /** Per-parse emoji shortcode overrides (merged over the 14 built-ins) */
+  emojiRegistry?: Record<string, string>;
 }
 ```
 
----
+All fields are optional — `parse(src, { strict: true })` is valid; the parser defensively merges with `defaultOptions`.
 
-### `parseOrThrow(text: string): AST`
-
-Parse text and throw on error. Use for simpler code when you expect parsing to succeed.
-
-**Parameters:**
-- `text` (string): Text containing ASCII wireframe and/or interaction DSL
-
-**Returns:**
-- `AST`: Parsed abstract syntax tree
-
-**Throws:**
-- `Error`: If parsing fails
-
-**Example:**
+### Parse Result
 
 ```typescript
-import { parseOrThrow } from 'wyreframe';
-
-try {
-  const ast = parseOrThrow(wireframe);
-  console.log('Scenes:', ast.scenes.length);
-} catch (error) {
-  console.error('Parse failed:', error.message);
+interface ParseResult {
+  /** First parsed block — legacy single-block accessor (=== blocks[0]) */
+  ast?: BlockNode;
+  /** All top-level @scene / @component blocks in declaration order */
+  blocks: BlockNode[];
+  errors: ParseError[];
+  warnings: ParseWarning[];
+  /** true iff errors.length === 0 */
+  success: boolean;
 }
 ```
 
----
+`BlockNode` is a tagged union:
 
-### `parseWireframe(wireframe: string): ParseResult`
-
-Parse only the wireframe structure (no interactions).
-
-**Parameters:**
-- `wireframe` (string): ASCII wireframe text
-
-**Returns:**
-- `ParseResult`: Parse result with success flag
-
----
-
-### `parseInteractions(dsl: string): InteractionResult`
-
-Parse only the interaction DSL.
-
-**Parameters:**
-- `dsl` (string): Interaction DSL text
-
-**Returns:**
 ```typescript
-type InteractionResult =
-  | { success: true; interactions: unknown[] }
-  | { success: false; errors: ParseError[] };
+type BlockNode =
+  | { TAG: 'SceneBlock';     _0: SceneNode['_0'] }      // slug, title?, device?, transition?, children, layout
+  | { TAG: 'ComponentBlock'; _0: ComponentNode['_0'] }; // slug, props, children, layout
 ```
 
----
+See [types.md](types.md) for all 15 AST node types.
 
-### `render(ast: AST, options?: RenderOptions): RenderResult`
+**Multi-block sources** — multiple `@scene:` / `@component:` declarations in one file each become an entry in `blocks`:
 
-Render AST to DOM elements.
-
-**Parameters:**
-- `ast` (AST): Parsed AST from parse()
-- `options` (RenderOptions, optional): Render configuration
-
-**Returns:**
 ```typescript
-interface RenderResult {
-  root: HTMLElement;
-  sceneManager: SceneManager;
+const result = parse(multiSceneSource);
+const scenes = result.blocks.filter(b => b.TAG === 'SceneBlock');
+```
+
+### Error Handling
+
+```typescript
+interface ParseError {
+  code: ErrorCode;            // e.g. 'UnclosedContainer'
+  message: string;            // human-readable, 1-based positions
+  location: SourceLocation;   // 0-based { start, end_ } with row/col/offset
+  recoverable: boolean;
+}
+
+interface ParseWarning {
+  code: WarningCode;
+  message: string;
+  location: SourceLocation;
+  /** Present on heuristic-driven warnings; links to the Heuristics Catalog */
+  ruleId?: string;
 }
 ```
 
-**Important:** Pass `ast`, not the parse result!
-
-**Example:**
+By default the parser **recovers**: it marks the failed region, records the error, and continues. With `strict: true` parsing halts at the first erroring block and every error is reported as non-recoverable.
 
 ```typescript
-import { parse, render } from 'wyreframe';
+const result = parse(source);
 
-const result = parse(wireframe);
-
-if (result.success) {
-  // Correct: pass result.ast
-  const { root, sceneManager } = render(result.ast);
-
-  // WRONG: render(result) - will throw error!
-
-  document.getElementById('app').appendChild(root);
-  sceneManager.goto('login');
+for (const err of result.errors) {
+  console.error(
+    `${err.code} at ${err.location.start.row + 1}:${err.location.start.col + 1} — ${err.message}`
+  );
 }
+
+for (const warn of result.warnings) {
+  console.warn(`${warn.message}${warn.ruleId ? ` [${warn.ruleId}]` : ''}`);
+}
+```
+
+The full error/warning code catalog is in [syntax-v2.md → Errors and Warnings](syntax-v2.md#errors-and-warnings).
+
+### Heuristics Overrides
+
+Every parser tolerance is named and tunable. Pass a partial object — unset fields keep their defaults:
+
+```typescript
+const result = parse(source, {
+  heuristics: {
+    containerColumnTolerance: 0,  // require perfectly aligned walls
+    radioHorizontalGap: 10,       // group radios up to 10 cols apart
+  },
+});
+```
+
+| Field | Default | Purpose |
+|-------|---------|---------|
+| `containerColumnTolerance` | 1 | ± cols for container wall/corner alignment |
+| `containerWidthTolerance` | 2 | ± cols for top/bottom border width match |
+| `radioHorizontalGap` | 6 | Max col gap for same-row radio grouping |
+| `radioVerticalColumnTolerance` | 1 | ± cols for vertical radio grouping |
+| `radioMaxBlankRows` | 0 | Blank rows allowed inside a vertical radio group |
+| `centerSymmetryThreshold` | 0.15 | Symmetry ratio for center-align detection |
+| `rightAlignThreshold` | 0.10 | Right-margin ratio for right-align detection |
+| `dividerMinRun` | 3 | Minimum dash/equals run for a divider |
+| `nearMissTokenDistance` | 1 | Token edit distance for near-miss warnings |
+
+### Custom Emoji Shortcodes
+
+```typescript
+const result = parse(source, {
+  emojiRegistry: {
+    rocket: '🚀',
+    check: '✅',   // overrides the built-in ✔ for this parse only
+  },
+});
+```
+
+Overrides are per-parse and never mutate global state. Lookups fall back to the 14 built-in shortcodes.
+
+### TypeScript Integration
+
+The V2 export ships hand-rolled declarations (`V2Parser.d.ts`). AST nodes are ReScript variants encoded as `{ TAG, _0 }` — narrow on `TAG`:
+
+```typescript
+import type { AstNode, ContainerNode } from 'wyreframe/parser/v2';
+
+function walk(node: AstNode, depth = 0) {
+  console.log('  '.repeat(depth) + node.TAG);
+  switch (node.TAG) {
+    case 'ContainerNode':
+    case 'SceneNode':
+    case 'ComponentNode':
+      node._0.children.forEach(c => walk(c, depth + 1));
+      break;
+    case 'ButtonNode':
+      console.log('  '.repeat(depth + 1) + node._0.text);
+      break;
+  }
+}
+```
+
+Treat all AST fields as read-only — the parser never mutates records after construction.
+
+### ReScript API
+
+```rescript
+let result = V2Parser.parse(source, ())
+
+if result.success {
+  result.blocks->Array.forEach(block =>
+    switch block {
+    | V2Types.SceneBlock({slug, children, _}) =>
+      Console.log2("scene", (slug, Array.length(children)))
+    | V2Types.ComponentBlock({slug, props, _}) =>
+      Console.log2("component", (slug, Array.length(props)))
+    }
+  )
+}
+
+// With options
+let result = V2Parser.parse(
+  source,
+  ~options={
+    ...V2Parser.defaultOptions,
+    strict: true,
+    maxDepth: 5,
+  },
+  (),
+)
 ```
 
 ---
 
-### `createUI(text: string, options?: RenderOptions): CreateUIResult`
+## Legacy V1 API
 
-Parse and render in one step. **Recommended for most use cases.**
+> The V1 surface is the `wyreframe` main export. It parses **V1 syntax** (`#id` inputs, `"text"` links, `'text'` emphasis — different from v2.3) and is the only path that renders HTML, scene transitions, and the Interaction DSL. It will remain available until V2 renderer integration lands (migration phases 3–5).
 
-**Parameters:**
-- `text` (string): Text containing ASCII wireframe and/or interaction DSL
-- `options` (RenderOptions, optional): Render configuration
+### Core Functions (V1)
 
-**Returns:**
-```typescript
-type CreateUIResult =
-  | { success: true; root: HTMLElement; sceneManager: SceneManager; ast: AST; warnings: ParseError[] }
-  | { success: false; errors: ParseError[] };
-```
-
-**Example:**
+| Function | Signature | Description |
+|----------|-----------|-------------|
+| `parse` | `(text: string) => ParseResult` | Parse wireframe + Interaction DSL |
+| `parseOrThrow` | `(text: string) => AST` | Parse or throw |
+| `parseWireframe` | `(wireframe: string) => ParseResult` | Wireframe only |
+| `parseInteractions` | `(dsl: string) => InteractionResult` | Interaction DSL only |
+| `render` | `(ast: AST, options?: RenderOptions) => RenderResult` | Render AST to DOM (pass `ast`, not the parse result) |
+| `createUI` | `(text: string, options?: RenderOptions) => CreateUIResult` | Parse + render combined (recommended) |
+| `createUIOrThrow` | `(text, options?) => RenderResult & { ast }` | Parse + render or throw |
+| `fix` | `(text: string) => FixResult` | Auto-fix formatting issues |
+| `fixOnly` | `(text: string) => string` | Fix and return text only |
+| `version` | `string` | Library version |
+| `implementation` | `string` | `"rescript"` |
 
 ```typescript
 import { createUI } from 'wyreframe';
 
-const result = createUI(wireframe, {
-  device: 'mobile',
-  onSceneChange: (from, to) => console.log(`${from} -> ${to}`)
-});
+const result = createUI(wireframe, { device: 'mobile' });
 
 if (result.success) {
   document.getElementById('app').appendChild(result.root);
   result.sceneManager.goto('login');
+} else {
+  console.error(result.errors);
 }
 ```
 
----
-
-### `createUIOrThrow(text: string, options?: RenderOptions): RenderResult & { ast: AST }`
-
-Parse and render, throwing on error.
-
-**Parameters:**
-- `text` (string): Text containing ASCII wireframe and/or interaction DSL
-- `options` (RenderOptions, optional): Render configuration
-
-**Returns:**
-```typescript
-interface {
-  root: HTMLElement;
-  sceneManager: SceneManager;
-  ast: AST;
-}
-```
-
-**Throws:**
-- `Error`: If parsing fails
-
----
-
-## Render Options
+### Render Options (V1)
 
 ```typescript
 interface RenderOptions {
-  /** Additional CSS class for container */
-  containerClass?: string;
-
-  /** Inject default styles (default: true) */
-  injectStyles?: boolean;
-
-  /**
-   * Override the device type for all scenes.
-   * Overrides the @device directive in scene definitions.
-   */
-  device?: DeviceType;
-
-  /**
-   * Callback fired when navigating between scenes.
-   * @param fromScene - Scene ID navigating from (undefined if initial)
-   * @param toScene - Scene ID navigating to
-   */
+  containerClass?: string;   // extra CSS class on the root container
+  injectStyles?: boolean;    // inject default styles (default: true)
+  device?: DeviceType;       // override @device for all scenes
   onSceneChange?: (fromScene: string | undefined, toScene: string) => void;
-
-  /**
-   * Callback fired when a button or link without a navigation target is clicked.
-   * Useful for handling dead-end interactions, showing modals, etc.
-   * @param info - Information about the clicked element
-   */
-  onDeadEndClick?: (info: DeadEndClickInfo) => void;
+  onDeadEndClick?: (info: DeadEndClickInfo) => void; // clicks with no navigation target
 }
 
 type DeviceType =
-  | 'desktop'      // 1440x900
-  | 'laptop'       // 1280x800
-  | 'tablet'       // 768x1024
+  | 'desktop'           // 1440x900
+  | 'laptop'            // 1280x800
+  | 'tablet'            // 768x1024
   | 'tablet-landscape'  // 1024x768
-  | 'mobile'       // 375x812
+  | 'mobile'            // 375x812
   | 'mobile-landscape'; // 812x375
 
 interface DeadEndClickInfo {
@@ -320,386 +341,61 @@ interface DeadEndClickInfo {
 }
 ```
 
-**Example:**
-
-```typescript
-const result = createUI(wireframe, {
-  containerClass: 'my-app',
-  device: 'mobile',
-
-  onSceneChange: (from, to) => {
-    console.log(`Navigated: ${from ?? 'initial'} -> ${to}`);
-    analytics.track('scene_view', { scene: to });
-  },
-
-  onDeadEndClick: (info) => {
-    console.log(`Dead-end click: ${info.elementText}`);
-    if (info.elementId === 'help') {
-      showHelpModal();
-    }
-  }
-});
-```
-
----
-
-## Scene Manager
-
-The SceneManager provides programmatic control over scene navigation.
+### Scene Manager (V1)
 
 ```typescript
 interface SceneManager {
-  /** Navigate to a scene by ID */
   goto(sceneId: string, transition?: TransitionType): void;
-
-  /** Navigate back in history */
   back(): void;
-
-  /** Navigate forward in history */
   forward(): void;
-
-  /** Get the current scene ID */
   getCurrentScene(): string | undefined;
-
-  /** Get all available scene IDs */
   getSceneIds(): string[];
 }
 
 type TransitionType = 'fade' | 'slide-left' | 'slide-right' | 'zoom';
 ```
 
-**Example:**
+### Auto-Fix API (V1)
 
 ```typescript
-const { sceneManager } = result;
-
-// Navigate to a scene
-sceneManager.goto('dashboard');
-
-// Navigate with transition
-sceneManager.goto('settings', 'slide-left');
-
-// Navigation history
-sceneManager.back();
-sceneManager.forward();
-
-// Query state
-console.log('Current:', sceneManager.getCurrentScene());
-console.log('All scenes:', sceneManager.getSceneIds());
-```
-
----
-
-## Auto-Fix API
-
-Wyreframe can automatically fix common wireframe formatting issues.
-
-### `fix(text: string): FixResult`
-
-Attempt to auto-fix errors and warnings in the wireframe text.
-
-**Parameters:**
-- `text` (string): The wireframe markdown text
-
-**Returns:**
-```typescript
-type FixResult =
-  | { success: true; text: string; fixed: FixedIssue[]; remaining: ParseError[] }
-  | { success: false; errors: ParseError[] };
-
-interface FixedIssue {
-  original: ParseError;
-  description: string;
-  line: number;
-  column: number;
-}
-```
-
-**Fixable Issues:**
-- `MisalignedPipe`: Adjusts pipe positions to correct columns
-- `MisalignedClosingBorder`: Fixes closing border alignment
-- `UnusualSpacing`: Replaces tabs with spaces
-- `UnclosedBracket`: Adds missing closing brackets
-- `MismatchedWidth`: Extends shorter borders to match
-
-**Example:**
-
-```typescript
-import { fix, parse } from 'wyreframe';
-
-const messyWireframe = `
-+----------+
-| Button  |
-+---------+
-`;
+import { fix, fixOnly } from 'wyreframe';
 
 const result = fix(messyWireframe);
-
 if (result.success) {
-  console.log(`Fixed ${result.fixed.length} issues`);
-
-  result.fixed.forEach(issue => {
-    console.log(`- ${issue.description} at line ${issue.line}`);
-  });
-
-  if (result.remaining.length > 0) {
-    console.warn('Manual fixes needed:', result.remaining);
-  }
-
-  // Use the fixed text
+  console.log(`Fixed ${result.fixed.length} issues`);   // FixedIssue[]
+  console.warn('Manual fixes needed:', result.remaining);
   const parsed = parse(result.text);
 }
-```
-
----
-
-### `fixOnly(text: string): string`
-
-Convenience function - fix and return just the fixed text.
-
-**Parameters:**
-- `text` (string): The wireframe markdown text
-
-**Returns:**
-- `string`: The fixed text (or original if no fixes applied)
-
-**Example:**
-
-```typescript
-import { fixOnly, parse } from 'wyreframe';
 
 const cleanText = fixOnly(rawWireframe);
-const result = parse(cleanText);
 ```
 
----
+**Fixable issues:** `MisalignedPipe`, `MisalignedClosingBorder`, `UnusualSpacing` (tabs → spaces), `UnclosedBracket`, `MismatchedWidth`.
 
-## Error Handling
+### V1 Error Codes
 
-### Error Structure
+| Code | Severity |
+|------|----------|
+| `UnclosedBox`, `MismatchedWidth`, `MisalignedPipe`, `OverlappingBoxes`, `InvalidElement`, `UnclosedBracket`, `EmptyButton`, `InvalidInteractionDSL` | Error |
+| `UnusualSpacing`, `DeepNesting` | Warning |
 
-```typescript
-interface ParseError {
-  message: string;
-  line?: number;
-  column?: number;
-  source?: string;
-}
-```
-
-### Error Codes
-
-| Code | Severity | Description |
-|------|----------|-------------|
-| `UnclosedBox` | Error | Box missing closing border |
-| `MismatchedWidth` | Error | Top and bottom edges have different widths |
-| `MisalignedPipe` | Error | Vertical border not aligned |
-| `OverlappingBoxes` | Error | Boxes overlap incorrectly |
-| `InvalidElement` | Error | Unknown element syntax |
-| `UnclosedBracket` | Error | Bracket not closed |
-| `EmptyButton` | Error | Button has no text |
-| `InvalidInteractionDSL` | Error | DSL parsing failed |
-| `UnusualSpacing` | Warning | Tabs instead of spaces detected |
-| `DeepNesting` | Warning | Nesting depth exceeds 4 levels |
-
-### Handling Errors
-
-```typescript
-import { parse } from 'wyreframe';
-
-const result = parse(wireframe);
-
-if (!result.success) {
-  result.errors.forEach(error => {
-    console.error(`Error at line ${error.line}: ${error.message}`);
-  });
-} else if (result.warnings.length > 0) {
-  result.warnings.forEach(warning => {
-    console.warn(`Warning: ${warning.message}`);
-  });
-}
-```
-
----
-
-## TypeScript Integration
-
-### Type Definitions
-
-```typescript
-import type {
-  AST,
-  Scene,
-  Element,
-  BoxElement,
-  ButtonElement,
-  InputElement,
-  LinkElement,
-  TextElement,
-  CheckboxElement,
-  DividerElement,
-  RowElement,
-  SectionElement,
-  ParseError,
-  ParseResult,
-  RenderResult,
-  RenderOptions,
-  SceneManager,
-  DeviceType,
-  TransitionType,
-  Alignment,
-  ButtonVariant,
-  Action,
-  GotoAction,
-  DeadEndClickInfo,
-  OnSceneChangeCallback,
-  OnDeadEndClickCallback,
-  FixResult,
-  FixedIssue,
-} from 'wyreframe';
-```
-
-### Type Guards
-
-```typescript
-import type { Element } from 'wyreframe';
-
-function isButton(element: Element): element is ButtonElement {
-  return element.TAG === 'Button';
-}
-
-function isInput(element: Element): element is InputElement {
-  return element.TAG === 'Input';
-}
-
-// Usage
-function processElements(elements: Element[]) {
-  elements.forEach(element => {
-    switch (element.TAG) {
-      case 'Button':
-        console.log(`Button: ${element.text}`);
-        break;
-      case 'Input':
-        console.log(`Input: ${element.id}`);
-        break;
-      case 'Link':
-        console.log(`Link: ${element.text}`);
-        break;
-      case 'Text':
-        console.log(`Text: ${element.content}`);
-        break;
-      case 'Box':
-        console.log(`Box with ${element.children.length} children`);
-        processElements(element.children);
-        break;
-    }
-  });
-}
-```
-
----
-
-## ReScript API
-
-### Basic Usage
+### ReScript (V1)
 
 ```rescript
-open Renderer
-
-let wireframe = `
-@scene: login
-
-+---------------------------+
-|       'Login'             |
-|  #email                   |
-|       [ Submit ]          |
-+---------------------------+
-`
-
-switch createUI(wireframe, None) {
-| Ok({root, sceneManager, _}) =>
-    sceneManager.goto("login")
-| Error(errors) =>
-    errors->Array.forEach(e => Console.error(e))
+switch Renderer.createUI(wireframe, None) {
+| Ok({root, sceneManager, _}) => sceneManager.goto("login")
+| Error(errors) => Console.error(errors)
 }
 ```
-
-### With Options
-
-```rescript
-open Renderer
-
-let options: renderOptions = {
-  device: Some(#mobile),
-  containerClass: Some("my-app"),
-  injectStyles: Some(true),
-  onSceneChange: Some((from, to) => {
-    Console.log2("Scene change:", (from, to))
-  }),
-  onDeadEndClick: Some(info => {
-    Console.log2("Dead-end click:", info.elementId)
-  }),
-}
-
-switch createUI(wireframe, Some(options)) {
-| Ok({root, sceneManager, ast}) =>
-    Console.log2("Parsed scenes:", ast.scenes->Array.length)
-    sceneManager.goto("login")
-| Error(errors) =>
-    Console.error(errors)
-}
-```
-
-### Scene Manager in ReScript
-
-```rescript
-let {sceneManager} = result
-
-// Navigate
-sceneManager.goto("dashboard")
-
-// With transition (if supported)
-sceneManager.goto("settings")
-
-// History
-sceneManager.back()
-sceneManager.forward()
-
-// Query
-switch sceneManager.getCurrentScene() {
-| Some(scene) => Console.log2("Current:", scene)
-| None => Console.log("No scene")
-}
-
-let scenes = sceneManager.getSceneIds()
-Console.log2("All scenes:", scenes)
-```
-
----
-
-## API Reference Summary
-
-| Function | Parameters | Returns | Description |
-|----------|------------|---------|-------------|
-| `parse` | `text: string` | `ParseResult` | Parse mixed content |
-| `parseOrThrow` | `text: string` | `AST` | Parse or throw |
-| `parseWireframe` | `wireframe: string` | `ParseResult` | Parse wireframe only |
-| `parseInteractions` | `dsl: string` | `InteractionResult` | Parse interactions only |
-| `render` | `ast: AST, options?: RenderOptions` | `RenderResult` | Render AST to DOM |
-| `createUI` | `text: string, options?: RenderOptions` | `CreateUIResult` | Parse + render combined |
-| `createUIOrThrow` | `text: string, options?: RenderOptions` | `RenderResult & { ast }` | Parse + render or throw |
-| `fix` | `text: string` | `FixResult` | Auto-fix wireframe issues |
-| `fixOnly` | `text: string` | `string` | Fix and return text only |
-| `version` | - | `string` | Library version |
-| `implementation` | - | `string` | Implementation type ("rescript") |
 
 ---
 
 ## See Also
 
+- [Syntax v2.3 Reference](./syntax-v2.md) - Complete syntax specification
 - [Type Definitions](./types.md) - Complete type reference
 - [Examples](./examples.md) - Comprehensive usage examples
-- [Developer Guide](./developer-guide.md) - Extending the parser
+- [Developer Guide](./developer-guide.md) - Architecture and extending the parser
 
 ---
 
@@ -711,5 +407,5 @@ Console.log2("All scenes:", scenes)
 ---
 
 **Version**: 0.4.3
-**Last Updated**: 2025-12-27
+**Last Updated**: 2026-06-11
 **License**: GPL-3.0

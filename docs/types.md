@@ -2,1333 +2,439 @@
 
 **Version**: 0.4.3
 **Language**: ReScript (compiled to JavaScript/TypeScript)
-**Last Updated**: 2025-12-27
+**Last Updated**: 2026-06-11
+
+This reference covers the **V2 parser types** (`wyreframe/parser/v2`, declared in `src/parser/v2/V2Parser.d.ts`). Legacy V1 types are summarized [at the end](#legacy-v1-types).
 
 ## Table of Contents
 
-- [Core Types](#core-types)
-- [Grid Types](#grid-types)
-- [Element Types](#element-types)
-- [Scene Types](#scene-types)
-- [Device Types](#device-types)
-- [Interaction Types](#interaction-types)
-- [Error Types](#error-types)
-- [Utility Types](#utility-types)
+- [Encoding Conventions](#encoding-conventions)
+- [Positions and Locations](#positions-and-locations)
+- [Enumerations](#enumerations)
+- [Layout Types](#layout-types)
+- [AST Node Types](#ast-node-types)
+- [Error and Warning Types](#error-and-warning-types)
+- [Options Types](#options-types)
+- [Result Type](#result-type)
+- [Legacy V1 Types](#legacy-v1-types)
 
 ---
 
-## Core Types
+## Encoding Conventions
+
+V2 AST values are ReScript variants exposed to JavaScript as tagged objects:
+
+```typescript
+{ TAG: 'ButtonNode', _0: { location, id, text } }
+```
+
+- Narrow unions on the `TAG` field; the payload is always `_0`.
+- Some field names carry a trailing underscore to avoid ReScript keywords: `end_` (location end), `Center_` (distribution).
+- All AST records are **immutable** — the parser never mutates them after construction; treat them as read-only.
+- All positions are **0-based**. Columns are *visual columns* (Unicode wide chars = 2, tabs expanded by `tabSize`).
+
+---
+
+## Positions and Locations
 
 ### Position
 
-Represents a position in the 2D grid with row and column coordinates.
-
 ```typescript
 interface Position {
-  row: number;
-  col: number;
+  row: number;     // 0-based line index
+  col: number;     // 0-based visual column (Unicode + tab-aware)
+  offset: number;  // 0-based offset into the source
 }
 ```
 
-**Properties:**
-
-- `row` (number): Zero-based row index
-- `col` (number): Zero-based column index
-
-**Methods:**
+### SourceLocation
 
 ```typescript
-// Create a position
-function makePosition(row: number, col: number): Position;
-
-// Navigate in cardinal directions
-function right(pos: Position, n?: number): Position;
-function down(pos: Position, n?: number): Position;
-function left(pos: Position, n?: number): Position;
-function up(pos: Position, n?: number): Position;
-
-// Utilities
-function equals(pos1: Position, pos2: Position): boolean;
-function isWithin(pos: Position, bounds: Bounds): boolean;
-function toString(pos: Position): string;
+interface SourceLocation {
+  start: Position;
+  end_: Position;   // exclusive
+}
 ```
 
-**Example:**
-
-```typescript
-const pos = makePosition(5, 10);
-const nextPos = right(pos, 3); // { row: 5, col: 13 }
-const below = down(pos);       // { row: 6, col: 10 }
-```
-
----
+Every AST node, error, and warning carries a `SourceLocation`.
 
 ### Bounds
 
-Represents a rectangular bounding box.
+Pixel-free rectangle of a container in grid coordinates:
 
 ```typescript
 interface Bounds {
-  top: number;
-  left: number;
-  bottom: number;
-  right: number;
-}
-```
-
-**Properties:**
-
-- `top` (number): Top edge row index (inclusive)
-- `left` (number): Left edge column index (inclusive)
-- `bottom` (number): Bottom edge row index (inclusive)
-- `right` (number): Right edge column index (inclusive)
-
-**Methods:**
-
-```typescript
-// Create bounds
-function makeBounds(
-  top: number,
-  left: number,
-  bottom: number,
-  right: number
-): Bounds;
-
-// Dimensions
-function width(bounds: Bounds): number;
-function height(bounds: Bounds): number;
-function area(bounds: Bounds): number;
-
-// Relationships
-function contains(outer: Bounds, inner: Bounds): boolean;
-function overlaps(bounds1: Bounds, bounds2: Bounds): boolean;
-```
-
-**Example:**
-
-```typescript
-const bounds = makeBounds(0, 0, 10, 20);
-const w = width(bounds);  // 21 (0-20 inclusive)
-const h = height(bounds); // 11 (0-10 inclusive)
-const a = area(bounds);   // 231
-```
-
----
-
-### Alignment
-
-Text alignment within a box.
-
-```typescript
-type Alignment = 'Left' | 'Center' | 'Right';
-```
-
-**Values:**
-
-- `Left`: Left-aligned content
-- `Center`: Center-aligned content
-- `Right`: Right-aligned content
-
-**Example:**
-
-```typescript
-const align: Alignment = 'Center';
-```
-
----
-
-## Grid Types
-
-### CellChar
-
-Represents a character in the grid with semantic meaning.
-
-```typescript
-type CellChar =
-  | { TAG: 'Corner' }      // '+'
-  | { TAG: 'HLine' }       // '-'
-  | { TAG: 'VLine' }       // '|'
-  | { TAG: 'Divider' }     // '='
-  | { TAG: 'Space' }       // ' '
-  | { TAG: 'Char'; _0: string }; // Any other character
-```
-
-**Example:**
-
-```typescript
-const corner: CellChar = { TAG: 'Corner' };
-const letter: CellChar = { TAG: 'Char', _0: 'A' };
-```
-
----
-
-### Grid
-
-Internal 2D character grid structure (not typically exposed in public API).
-
-```typescript
-interface Grid {
-  cells: CellChar[][];
+  x: number;       // left col
+  y: number;       // top row
   width: number;
   height: number;
-  cornerIndex: Position[];
-  hLineIndex: Position[];
-  vLineIndex: Position[];
-  dividerIndex: Position[];
 }
 ```
 
-**Properties:**
-
-- `cells` (CellChar[][]): 2D array of cell characters
-- `width` (number): Grid width in characters
-- `height` (number): Grid height in lines
-- `cornerIndex` (Position[]): Index of all '+' positions
-- `hLineIndex` (Position[]): Index of all '-' positions
-- `vLineIndex` (Position[]): Index of all '|' positions
-- `dividerIndex` (Position[]): Index of all '=' positions
-
 ---
 
-## Element Types
-
-### Element
-
-Base union type for all UI elements.
+## Enumerations
 
 ```typescript
-type Element =
-  | BoxElement
-  | ButtonElement
-  | InputElement
-  | LinkElement
-  | CheckboxElement
-  | TextElement
-  | DividerElement
-  | RowElement
-  | SectionElement;
+type DeviceType      = 'Mobile' | 'Tablet' | 'Desktop';
+type Alignment       = 'Left' | 'Center' | 'Right';
+type DividerStyle    = 'Normal' | 'Bold';
+type LayoutDirection = 'Row' | 'Column' | 'Mixed';
+type Distribution    = 'Equal' | 'SpaceBetween' | 'SpaceAround' | 'Start' | 'End' | 'Center_';
 ```
 
 ---
 
-### BoxElement
+## Layout Types
 
-Represents a rectangular box container.
+Layout never duplicates nodes — groups address children **by index range** into the parent's `children` array (single source of truth).
+
+### ElementGroup
 
 ```typescript
-interface BoxElement {
-  TAG: 'Box';
-  name?: string;
-  bounds: Bounds;
-  children: Element[];
+interface ElementGroup {
+  direction: LayoutDirection;
+  start: number;     // inclusive index into parent.children
+  end_: number;      // exclusive index
+  startRow: number;  // visual row the group starts on
 }
 ```
 
-**Properties:**
-
-- `name` (string, optional): Box name extracted from top border (e.g., "+--Login--+")
-- `bounds` (Bounds): Bounding box coordinates
-- `children` (Element[]): Nested elements within the box
-
-**Example:**
+### LayoutInfo
 
 ```typescript
-const box: BoxElement = {
-  TAG: 'Box',
-  name: 'Login',
-  bounds: { top: 0, left: 0, bottom: 10, right: 30 },
-  children: [
-    // ... child elements
-  ]
-};
-```
-
----
-
-### ButtonElement
-
-Represents a button element.
-
-```typescript
-interface ButtonElement {
-  TAG: 'Button';
-  id: string;
-  text: string;
-  position: Position;
-  align: Alignment;
+interface LayoutInfo {
+  direction: LayoutDirection;   // overall direction (Mixed if groups differ)
+  groups: ElementGroup[];
+  distribution?: Distribution;  // optional spacing hint
 }
 ```
 
-**Properties:**
-
-- `id` (string): Slugified button text for identification
-- `text` (string): Button label text
-- `position` (Position): Grid position where button appears
-- `align` (Alignment): Horizontal alignment within container
-
-**Syntax:**
-
-```
-[ Button Text ]
-```
-
-**Example:**
-
-```typescript
-const button: ButtonElement = {
-  TAG: 'Button',
-  id: 'submit',
-  text: 'Submit',
-  position: { row: 5, col: 10 },
-  align: 'Center'
-};
-```
+Present on `SceneNode`, `ComponentNode`, and `ContainerNode`.
 
 ---
 
-### InputElement
+## AST Node Types
 
-Represents an input field.
+### AstNode (union)
 
 ```typescript
-interface InputElement {
-  TAG: 'Input';
-  id: string;
-  placeholder?: string;
-  position: Position;
+type AstNode =
+  | SceneNode | ComponentNode | ContainerNode
+  | TextNode | ButtonNode | LinkNode | InputNode | SelectNode
+  | CheckboxNode | RadioNode | DividerNode
+  | StringNode | EmojiNode | PropPlaceholderNode
+  | ErrorNode;
+```
+
+### BlockNode (root union)
+
+A parse result's roots — each top-level `@scene:` / `@component:`:
+
+```typescript
+type BlockNode =
+  | { TAG: 'SceneBlock';     _0: SceneNode['_0'] }
+  | { TAG: 'ComponentBlock'; _0: ComponentNode['_0'] };
+```
+
+### SceneNode
+
+```typescript
+{
+  TAG: 'SceneNode',
+  _0: {
+    location: SourceLocation;
+    slug: string;            // from @scene: <slug>
+    title?: string;          // from @title:
+    device?: DeviceType;     // from @device:
+    transition?: string;     // from @transition:
+    children: AstNode[];
+    layout: LayoutInfo;
+  }
 }
 ```
 
-**Properties:**
-
-- `id` (string): Input field identifier
-- `placeholder` (string, optional): Placeholder text (from interactions)
-- `position` (Position): Grid position
-
-**Syntax:**
-
-```
-#fieldname
-```
-
-**Example:**
+### ComponentNode
 
 ```typescript
-const input: InputElement = {
-  TAG: 'Input',
-  id: 'email',
-  placeholder: 'Enter your email',
-  position: { row: 3, col: 5 }
-};
-```
-
----
-
-### LinkElement
-
-Represents a clickable link.
-
-```typescript
-interface LinkElement {
-  TAG: 'Link';
-  id: string;
-  text: string;
-  position: Position;
-  align: Alignment;
+{
+  TAG: 'ComponentNode',
+  _0: {
+    location: SourceLocation;
+    slug: string;            // from @component: <slug>
+    props: PropDefinition[]; // from @props:
+    children: AstNode[];
+    layout: LayoutInfo;
+  }
 }
-```
 
-**Properties:**
-
-- `id` (string): Slugified link text
-- `text` (string): Link display text
-- `position` (Position): Grid position
-- `align` (Alignment): Horizontal alignment
-
-**Syntax:**
-
-```
-"Link Text"
-```
-
-**Example:**
-
-```typescript
-const link: LinkElement = {
-  TAG: 'Link',
-  id: 'forgot-password',
-  text: 'Forgot Password',
-  position: { row: 8, col: 12 },
-  align: 'Right'
-};
-```
-
----
-
-### CheckboxElement
-
-Represents a checkbox with optional label.
-
-```typescript
-interface CheckboxElement {
-  TAG: 'Checkbox';
-  checked: boolean;
-  label: string;
-  position: Position;
-}
-```
-
-**Properties:**
-
-- `checked` (boolean): Checkbox state
-- `label` (string): Label text following checkbox
-- `position` (Position): Grid position
-
-**Syntax:**
-
-```
-[x] Checked checkbox
-[ ] Unchecked checkbox
-```
-
-**Example:**
-
-```typescript
-const checkbox: CheckboxElement = {
-  TAG: 'Checkbox',
-  checked: true,
-  label: 'Remember me',
-  position: { row: 6, col: 5 }
-};
-```
-
----
-
-### TextElement
-
-Represents plain or emphasized text.
-
-```typescript
-interface TextElement {
-  TAG: 'Text';
-  content: string;
-  emphasis: boolean;
-  position: Position;
-  align: Alignment;
-}
-```
-
-**Properties:**
-
-- `content` (string): Text content
-- `emphasis` (boolean): Whether text is emphasized (starts with `*`)
-- `position` (Position): Grid position
-- `align` (Alignment): Horizontal alignment
-
-**Syntax:**
-
-```
-Plain text
-* Emphasized text
-```
-
-**Example:**
-
-```typescript
-const text: TextElement = {
-  TAG: 'Text',
-  content: 'Welcome',
-  emphasis: true,
-  position: { row: 2, col: 8 },
-  align: 'Center'
-};
-```
-
----
-
-### DividerElement
-
-Represents a horizontal divider line.
-
-```typescript
-interface DividerElement {
-  TAG: 'Divider';
-  position: Position;
-}
-```
-
-**Properties:**
-
-- `position` (Position): Grid position (row of divider)
-
-**Syntax:**
-
-```
-+---------------------------+
-|  Content above            |
-|===========================|  <- Divider
-|  Content below            |
-+---------------------------+
-```
-
-**Example:**
-
-```typescript
-const divider: DividerElement = {
-  TAG: 'Divider',
-  position: { row: 4, col: 0 }
-};
-```
-
----
-
-### RowElement
-
-Represents a horizontal grouping of elements.
-
-```typescript
-interface RowElement {
-  TAG: 'Row';
-  children: Element[];
-  align: Alignment;
-}
-```
-
-**Properties:**
-
-- `children` (Element[]): Elements in the row
-- `align` (Alignment): Row alignment
-
-**Example:**
-
-```typescript
-const row: RowElement = {
-  TAG: 'Row',
-  children: [
-    { TAG: 'Button', id: 'cancel', text: 'Cancel', /* ... */ },
-    { TAG: 'Button', id: 'submit', text: 'Submit', /* ... */ }
-  ],
-  align: 'Right'
-};
-```
-
----
-
-### SectionElement
-
-Represents a named section within a box (separated by dividers).
-
-```typescript
-interface SectionElement {
-  TAG: 'Section';
+interface PropDefinition {
   name: string;
-  children: Element[];
+  optional: boolean;       // true for `name?`
+  defaultValue?: string;
 }
 ```
 
-**Properties:**
-
-- `name` (string): Section name/identifier
-- `children` (Element[]): Elements in the section
-
-**Example:**
+### ContainerNode
 
 ```typescript
-const section: SectionElement = {
-  TAG: 'Section',
-  name: 'header',
-  children: [
-    { TAG: 'Text', content: 'Header', /* ... */ }
-  ]
-};
-```
-
----
-
-## Scene Types
-
-### Scene
-
-Represents a single screen or page in the wireframe.
-
-```typescript
-interface Scene {
-  id: string;
-  title: string;
-  transition: string;
-  device: DeviceType;
-  elements: Element[];
+{
+  TAG: 'ContainerNode',
+  _0: {
+    location: SourceLocation;
+    id?: string;                    // from +--#id--+ or | #id |
+    name?: string;                  // from +--name--+
+    children: AstNode[];
+    layout: LayoutInfo;
+    bounds: Bounds;                 // grid rectangle of the box
+    containsErrorRecovery: boolean; // true if recovery occurred inside
+  }
 }
 ```
 
-**Properties:**
-
-- `id` (string): Unique scene identifier
-- `title` (string): Scene title for display
-- `transition` (string): Transition effect when navigating to this scene
-- `device` (DeviceType): Target device for responsive rendering
-- `elements` (Element[]): All elements in the scene
-
-**Directives:**
-
-```
-@scene: scene-id
-@title: Scene Title
-@transition: slide-left
-@device: mobile
-```
-
-**Example:**
+### Leaf Elements
 
 ```typescript
-const scene: Scene = {
-  id: 'login',
-  title: 'Login Screen',
-  transition: 'fade',
-  elements: [
-    // ... elements
-  ]
-};
+// Plain text (fallback element)
+{ TAG: 'TextNode',     _0: { location, content: string, align: Alignment } }
+
+// [ Label ]
+{ TAG: 'ButtonNode',   _0: { location, id: string, text: string } }   // id auto-slugged
+
+// < Label >
+{ TAG: 'LinkNode',     _0: { location, id: string, text: string } }   // id auto-slugged
+
+// [__placeholder__]
+{ TAG: 'InputNode',    _0: { location, placeholder: string } }
+
+// [v: placeholder]
+{ TAG: 'SelectNode',   _0: { location, id: string, placeholder: string } }
+
+// [x] Label / [ ] Label
+{ TAG: 'CheckboxNode', _0: { location, checked: boolean, label: string } }
+
+// (*) Label / ( ) Label
+{ TAG: 'RadioNode',    _0: { location, selected: boolean, label: string, group?: string } }
+
+// --- / === / --- label --- / -#id-
+{ TAG: 'DividerNode',  _0: { location, style: DividerStyle, id?: string, label?: string } }
 ```
 
----
+Radio `group` is assigned automatically by the grouping heuristics (vertical run, same-row, same-container).
 
-### AST
+### StringNode
 
-The complete Abstract Syntax Tree representing the parsed wireframe.
+`"text"` literal with interpolation parts:
 
 ```typescript
-interface AST {
-  scenes: Scene[];
+{
+  TAG: 'StringNode',
+  _0: {
+    location: SourceLocation;
+    content: string;                       // resolved text content
+    interpolations: InterpolationContent[];
+    multiline: boolean;
+  }
+}
+
+type InterpolationContent =
+  | { TAG: 'Literal';  _0: string }
+  | { TAG: 'PropRef';  _0: PropPlaceholderNode['_0'] }
+  | { TAG: 'EmojiRef'; _0: EmojiNode['_0'] };
+```
+
+### EmojiNode
+
+```typescript
+{ TAG: 'EmojiNode', _0: { location, shortcode: string, emoji: string } }
+```
+
+### PropPlaceholderNode
+
+```typescript
+{
+  TAG: 'PropPlaceholderNode',
+  _0: {
+    location: SourceLocation;
+    name: string;
+    required: boolean;       // false for ${name?} and ${name:default}
+    defaultValue?: string;   // from ${name:default}
+  }
 }
 ```
 
-**Properties:**
+### ErrorNode
 
-- `scenes` (Scene[]): Array of all scenes in the wireframe
-
-**Example:**
+Inserted during error recovery where an element failed to parse:
 
 ```typescript
-const ast: AST = {
-  scenes: [
-    {
-      id: 'login',
-      title: 'Login',
-      transition: 'fade',
-      device: 'Mobile',
-      elements: [/* ... */]
-    },
-    {
-      id: 'dashboard',
-      title: 'Dashboard',
-      transition: 'slide-left',
-      device: 'Desktop',
-      elements: [/* ... */]
-    }
-  ]
-};
+{ TAG: 'ErrorNode', _0: { location, message: string, recoveredContent?: string } }
 ```
 
 ---
 
-## Device Types
+## Error and Warning Types
 
-### DeviceType
-
-Target device type for responsive wireframes.
+### ErrorCode
 
 ```typescript
-type DeviceType =
-  | 'Desktop'          // 1440x900 (16:10)
-  | 'Laptop'           // 1280x800 (16:10)
-  | 'Tablet'           // 768x1024 (3:4)
-  | 'TabletLandscape'  // 1024x768 (4:3)
-  | 'Mobile'           // 375x812 (iPhone X ratio)
-  | 'MobileLandscape'  // 812x375
-  | { TAG: 'Custom'; width: number; height: number };
+type ErrorCode =
+  | 'InvalidIdFormat'
+  | 'MultipleIdDeclarations'
+  | 'UnclosedInput'
+  | 'UnclosedString'
+  | 'UnclosedContainer'
+  | 'MissingBlockDeclaration'
+  | 'NestedBlockDeclaration'
+  | 'MaxDepthExceeded';
 ```
 
-**Preset Values:**
+### WarningCode
 
-| Device | Width | Height | Aspect Ratio |
-|--------|-------|--------|--------------|
-| Desktop | 1440 | 900 | 16:10 |
-| Laptop | 1280 | 800 | 16:10 |
-| Tablet | 768 | 1024 | 3:4 |
-| TabletLandscape | 1024 | 768 | 4:3 |
-| Mobile | 375 | 812 | ~9:19.5 |
-| MobileLandscape | 812 | 375 | ~19.5:9 |
-
-**Directive Syntax:**
-
-```
-@device: desktop
-@device: mobile
-@device: tablet
-@device: 1920x1080
-```
-
----
-
-### DeviceDimensions
-
-Computed dimensions for a device type.
+Plain-string codes for parameterless warnings; `{ TAG, _0 }` variants for codes carrying a payload:
 
 ```typescript
-interface DeviceDimensions {
-  width: number;
-  height: number;
-  ratio: number;
-  name: string;
-}
+type WarningCode =
+  | 'PropOutsideComponent'
+  | 'MixedDividerLabelId'
+  | 'MissingCheckboxLabel'
+  | 'MissingRadioLabel'
+  | 'MisalignedContainerCorner'
+  | 'MisalignedContainerWall'
+  | 'InconsistentContainerWidth'
+  | 'RadioGroupAmbiguous'
+  | 'LooksLikeButton' | 'LooksLikeInput' | 'LooksLikeCheckbox' | 'LooksLikeRadio'
+  | { TAG: 'UnknownEmoji';          _0: string }   // shortcode name
+  | { TAG: 'DuplicatePropName';     _0: string }
+  | { TAG: 'DuplicateContainerId';  _0: string }
+  | { TAG: 'UnknownPropReference';  _0: string }
+  | { TAG: 'MultipleRadiosSelected'; _0: string }; // group name
 ```
 
-**Properties:**
-
-- `width` (number): Device width in pixels
-- `height` (number): Device height in pixels
-- `ratio` (number): Aspect ratio (width / height)
-- `name` (string): Device name identifier
-
-**Example:**
-
-```typescript
-const mobileDimensions: DeviceDimensions = {
-  width: 375,
-  height: 812,
-  ratio: 0.462,
-  name: 'mobile'
-};
-```
-
----
-
-### parseDeviceType
-
-Parse a device type string into a DeviceType.
-
-```typescript
-function parseDeviceType(str: string): DeviceType | undefined;
-```
-
-**Supported Formats:**
-
-- Preset names: `"desktop"`, `"mobile"`, `"tablet"`, etc.
-- Custom dimensions: `"1920x1080"`, `"800 x 600"`
-
-**Example:**
-
-```typescript
-parseDeviceType("mobile");      // 'Mobile'
-parseDeviceType("1920x1080");   // { TAG: 'Custom', width: 1920, height: 1080 }
-parseDeviceType("invalid");     // undefined
-```
-
----
-
-## Interaction Types
-
-### InteractionVariant
-
-Button style variants.
-
-```typescript
-type InteractionVariant = 'Primary' | 'Secondary' | 'Ghost';
-```
-
-**Values:**
-
-- `Primary`: Primary button style
-- `Secondary`: Secondary button style
-- `Ghost`: Ghost/transparent button style
-
----
-
-### InteractionAction
-
-Actions that can be triggered by interactions.
-
-```typescript
-type InteractionAction =
-  | GotoAction
-  | BackAction
-  | ForwardAction
-  | ValidateAction
-  | CallAction;
-```
-
----
-
-### GotoAction
-
-Navigate to another scene.
-
-```typescript
-interface GotoAction {
-  TAG: 'Goto';
-  target: string;
-  transition: string;
-  condition?: string;
-}
-```
-
-**Properties:**
-
-- `target` (string): Target scene ID
-- `transition` (string): Transition effect
-- `condition` (string, optional): Conditional expression
-
-**Syntax:**
-
-```
-@click -> goto(dashboard, slide-left)
-@click -> goto(success) if validated
-```
-
-**Example:**
-
-```typescript
-const gotoAction: GotoAction = {
-  TAG: 'Goto',
-  target: 'dashboard',
-  transition: 'slide-left',
-  condition: undefined
-};
-```
-
----
-
-### BackAction
-
-Navigate to previous scene.
-
-```typescript
-interface BackAction {
-  TAG: 'Back';
-}
-```
-
-**Syntax:**
-
-```
-@click -> back()
-```
-
----
-
-### ForwardAction
-
-Navigate to next scene in history.
-
-```typescript
-interface ForwardAction {
-  TAG: 'Forward';
-}
-```
-
-**Syntax:**
-
-```
-@click -> forward()
-```
-
----
-
-### ValidateAction
-
-Validate form fields.
-
-```typescript
-interface ValidateAction {
-  TAG: 'Validate';
-  fields: string[];
-}
-```
-
-**Properties:**
-
-- `fields` (string[]): Array of field IDs to validate
-
-**Syntax:**
-
-```
-@click -> validate(email, password)
-```
-
-**Example:**
-
-```typescript
-const validateAction: ValidateAction = {
-  TAG: 'Validate',
-  fields: ['email', 'password']
-};
-```
-
----
-
-### CallAction
-
-Call a custom function.
-
-```typescript
-interface CallAction {
-  TAG: 'Call';
-  function: string;
-  args: string[];
-  condition?: string;
-}
-```
-
-**Properties:**
-
-- `function` (string): Function name to call
-- `args` (string[]): Function arguments
-- `condition` (string, optional): Conditional expression
-
-**Syntax:**
-
-```
-@click -> submitForm(email, password)
-@change -> updatePreview() if enabled
-```
-
-**Example:**
-
-```typescript
-const callAction: CallAction = {
-  TAG: 'Call',
-  function: 'submitForm',
-  args: ['email', 'password'],
-  condition: undefined
-};
-```
-
----
-
-### Interaction
-
-Associates properties and actions with an element.
-
-```typescript
-interface Interaction {
-  elementId: string;
-  properties: Record<string, unknown>;
-  actions: InteractionAction[];
-}
-```
-
-**Properties:**
-
-- `elementId` (string): ID of target element
-- `properties` (Record<string, unknown>): Custom properties (variant, placeholder, etc.)
-- `actions` (InteractionAction[]): Event-triggered actions
-
-**Example:**
-
-```typescript
-const interaction: Interaction = {
-  elementId: 'login-button',
-  properties: {
-    variant: 'primary',
-    disabled: false
-  },
-  actions: [
-    {
-      TAG: 'Goto',
-      target: 'dashboard',
-      transition: 'slide-left'
-    }
-  ]
-};
-```
-
----
-
-### SceneInteractions
-
-Groups all interactions for a scene.
-
-```typescript
-interface SceneInteractions {
-  sceneId: string;
-  interactions: Interaction[];
-}
-```
-
-**Properties:**
-
-- `sceneId` (string): Scene identifier
-- `interactions` (Interaction[]): All interactions in the scene
-
-**Example:**
-
-```typescript
-const sceneInteractions: SceneInteractions = {
-  sceneId: 'login',
-  interactions: [
-    {
-      elementId: 'email',
-      properties: { placeholder: 'Email' },
-      actions: []
-    },
-    {
-      elementId: 'login-button',
-      properties: { variant: 'primary' },
-      actions: [
-        { TAG: 'Goto', target: 'dashboard', transition: 'fade' }
-      ]
-    }
-  ]
-};
-```
-
----
-
-## Error Types
-
-### ParseError
-
-Represents a parsing error or warning.
+### ParseError / ParseWarning
 
 ```typescript
 interface ParseError {
   code: ErrorCode;
-  severity: 'Error' | 'Warning';
-  context: ErrorContext;
-}
-```
-
-**Properties:**
-
-- `code` (ErrorCode): Specific error code with details
-- `severity` ('Error' | 'Warning'): Error severity level
-- `context` (ErrorContext): Contextual information
-
----
-
-### ErrorCode
-
-Discriminated union of all possible error codes.
-
-```typescript
-type ErrorCode =
-  | UncloseBoxError
-  | MismatchedWidthError
-  | MisalignedPipeError
-  | OverlappingBoxesError
-  | InvalidElementError
-  | UnclosedBracketError
-  | EmptyButtonError
-  | InvalidInteractionDSLError
-  | UnusualSpacingWarning
-  | DeepNestingWarning;
-```
-
----
-
-### UncloseBoxError
-
-Box is missing a closing border.
-
-```typescript
-interface UncloseBoxError {
-  TAG: 'UncloseBox';
-  corner: Position;
-  direction: string;
-}
-```
-
-**Properties:**
-
-- `corner` (Position): Opening corner position
-- `direction` (string): Which side is unclosed ('top', 'right', 'bottom', 'left')
-
----
-
-### MismatchedWidthError
-
-Box top and bottom edges have different widths.
-
-```typescript
-interface MismatchedWidthError {
-  TAG: 'MismatchedWidth';
-  topLeft: Position;
-  topWidth: number;
-  bottomWidth: number;
-}
-```
-
-**Properties:**
-
-- `topLeft` (Position): Top-left corner position
-- `topWidth` (number): Width of top edge
-- `bottomWidth` (number): Width of bottom edge
-
----
-
-### MisalignedPipeError
-
-Vertical border character is not aligned.
-
-```typescript
-interface MisalignedPipeError {
-  TAG: 'MisalignedPipe';
-  position: Position;
-  expected: number;
-  actual: number;
-}
-```
-
-**Properties:**
-
-- `position` (Position): Position of misaligned pipe
-- `expected` (number): Expected column position
-- `actual` (number): Actual column position
-
----
-
-### OverlappingBoxesError
-
-Two boxes overlap incorrectly.
-
-```typescript
-interface OverlappingBoxesError {
-  TAG: 'OverlappingBoxes';
-  box1Name?: string;
-  box2Name?: string;
-  position: Position;
-}
-```
-
-**Properties:**
-
-- `box1Name` (string, optional): First box name
-- `box2Name` (string, optional): Second box name
-- `position` (Position): Overlap position
-
----
-
-### InvalidElementError
-
-Unknown or invalid element syntax.
-
-```typescript
-interface InvalidElementError {
-  TAG: 'InvalidElement';
-  content: string;
-  position: Position;
-}
-```
-
-**Properties:**
-
-- `content` (string): Invalid element text
-- `position` (Position): Position in grid
-
----
-
-### EmptyButtonError
-
-Button has no text content.
-
-```typescript
-interface EmptyButtonError {
-  TAG: 'EmptyButton';
-  position: Position;
-}
-```
-
-**Properties:**
-
-- `position` (Position): Button position
-
----
-
-### InvalidInteractionDSLError
-
-Interaction DSL parsing failed.
-
-```typescript
-interface InvalidInteractionDSLError {
-  TAG: 'InvalidInteractionDSL';
   message: string;
-  position?: Position;
+  location: SourceLocation;
+  recoverable: boolean;     // false in strict mode or for fatal errors
+}
+
+interface ParseWarning {
+  code: WarningCode;
+  message: string;
+  location: SourceLocation;
+  ruleId?: string;          // heuristic-driven warnings only, e.g. 'container.wallAlignment'
 }
 ```
 
-**Properties:**
-
-- `message` (string): Error description
-- `position` (Position, optional): Error position if available
-
 ---
 
-### UnusualSpacingWarning
+## Options Types
 
-Unusual spacing detected (e.g., tabs instead of spaces).
+### ParseOptions
 
 ```typescript
-interface UnusualSpacingWarning {
-  TAG: 'UnusualSpacing';
-  position: Position;
-  issue: string;
+interface ParseOptions {
+  strict?: boolean;                       // default false
+  tabSize?: number;                       // default 4
+  maxDepth?: number;                      // default 10
+  heuristics?: HeuristicsPartial;
+  emojiRegistry?: Record<string, string>; // shortcode -> emoji
 }
 ```
 
-**Properties:**
-
-- `position` (Position): Warning position
-- `issue` (string): Description of spacing issue
-
----
-
-### DeepNestingWarning
-
-Nesting depth exceeds recommended limit.
+### HeuristicsPartial
 
 ```typescript
-interface DeepNestingWarning {
-  TAG: 'DeepNesting';
-  depth: number;
-  position: Position;
+interface HeuristicsPartial {
+  containerColumnTolerance?: number;      // default 1
+  containerWidthTolerance?: number;       // default 2
+  radioHorizontalGap?: number;            // default 6
+  radioVerticalColumnTolerance?: number;  // default 1
+  radioMaxBlankRows?: number;             // default 0
+  centerSymmetryThreshold?: number;       // default 0.15
+  rightAlignThreshold?: number;           // default 0.10
+  dividerMinRun?: number;                 // default 3
+  nearMissTokenDistance?: number;         // default 1
 }
 ```
 
-**Properties:**
-
-- `depth` (number): Actual nesting depth
-- `position` (Position): Position of deeply nested box
-
 ---
 
-### ErrorContext
-
-Contextual information for an error.
+## Result Type
 
 ```typescript
-interface ErrorContext {
-  codeSnippet?: string;
-  linesBefore: number;
-  linesAfter: number;
+interface ParseResult {
+  ast?: BlockNode;          // first block (=== blocks[0]); absent when blocks is empty
+  blocks: BlockNode[];      // all top-level blocks in declaration order
+  errors: ParseError[];
+  warnings: ParseWarning[];
+  success: boolean;         // errors.length === 0
 }
 ```
 
-**Properties:**
-
-- `codeSnippet` (string, optional): Formatted code snippet with error indicator
-- `linesBefore` (number): Number of lines shown before error
-- `linesAfter` (number): Number of lines shown after error
-
 ---
 
-## Utility Types
-
-### Result
-
-ReScript-style Result type for error handling.
+## Type Narrowing Example
 
 ```typescript
-type Result<T, E> =
-  | { TAG: 'Ok'; _0: T }
-  | { TAG: 'Error'; _0: E };
-```
+import { parse, type AstNode } from 'wyreframe/parser/v2';
 
-**Usage:**
-
-```typescript
-function handleResult<T>(result: Result<T, ParseError[]>) {
-  if (result.TAG === 'Ok') {
-    const value = result._0;
-    // Process success case
-  } else {
-    const errors = result._0;
-    // Handle errors
+function collectInputs(node: AstNode, out: string[] = []): string[] {
+  switch (node.TAG) {
+    case 'InputNode':
+      out.push(node._0.placeholder);
+      break;
+    case 'SceneNode':
+    case 'ComponentNode':
+    case 'ContainerNode':
+      node._0.children.forEach(c => collectInputs(c, out));
+      break;
   }
+  return out;
 }
 ```
 
 ---
 
-### Option
+## Legacy V1 Types
 
-ReScript-style Option type for nullable values.
+> Exported from the `wyreframe` main package. These describe the V1 parser/renderer surface (V1 syntax) and will be removed when V1 is retired.
 
-```typescript
-type Option<T> =
-  | { TAG: 'Some'; _0: T }
-  | { TAG: 'None' };
-```
+| Category | Types |
+|----------|-------|
+| Core | `Position` (row/col only), `Bounds` (top/left/bottom/right), `Alignment` |
+| Grid | `CellChar`, `Grid` |
+| Elements | `Element`, `BoxElement`, `ButtonElement`, `InputElement`, `LinkElement`, `CheckboxElement`, `TextElement`, `DividerElement`, `RowElement`, `SectionElement` |
+| Scenes | `Scene`, `AST` |
+| Device | `DeviceType` (6 values incl. `laptop`, `*-landscape`), `DeviceDimensions`, `parseDeviceType` |
+| Interactions | `InteractionVariant`, `InteractionAction`, `GotoAction`, `BackAction`, `ForwardAction`, `ValidateAction`, `CallAction`, `Interaction`, `SceneInteractions` |
+| Errors | `ParseError` (message/line/column), `ErrorCode`, per-code error types, `ErrorContext` |
+| Rendering | `RenderOptions`, `RenderResult`, `SceneManager`, `TransitionType`, `DeadEndClickInfo` |
+| Utility | `Result`, `Option` |
 
-**Usage:**
+Key differences from V2:
 
-```typescript
-function handleOption<T>(option: Option<T>) {
-  if (option.TAG === 'Some') {
-    const value = option._0;
-    // Use value
-  } else {
-    // Handle absence
-  }
-}
-```
+- V1 `Position` has no `offset` and counts code units, not visual columns.
+- V1 elements use `Box`/`Row`/`Section` wrappers; V2 expresses grouping via `LayoutInfo` index ranges.
+- V1 `ParseError` has optional `line`/`column`; V2 always provides a full `SourceLocation` and a machine-readable `code`.
+- V1 `DeviceType` is lowercase with 6 values; V2 `DeviceType` is `'Mobile' | 'Tablet' | 'Desktop'`.
 
----
-
-## Type Summary
-
-### Core Types
-
-- `Position` - Grid coordinates
-- `Bounds` - Rectangular bounds
-- `Alignment` - Text alignment
-
-### Element Types
-
-- `Element` - Union of all element types
-- `BoxElement` - Container box
-- `ButtonElement` - Button
-- `InputElement` - Input field
-- `LinkElement` - Clickable link
-- `CheckboxElement` - Checkbox
-- `TextElement` - Text content
-- `DividerElement` - Horizontal divider
-- `RowElement` - Element row
-- `SectionElement` - Named section
-
-### Scene Types
-
-- `Scene` - Single screen/page
-- `AST` - Complete wireframe AST
-
-### Device Types
-
-- `DeviceType` - Target device (Desktop, Mobile, etc.)
-- `DeviceDimensions` - Computed device dimensions
-- `parseDeviceType` - Parse device string to type
-
-### Interaction Types
-
-- `Interaction` - Element interaction
-- `InteractionAction` - Action to perform
-- `SceneInteractions` - Scene's interactions
-
-### Error Types
-
-- `ParseError` - Parse error/warning
-- `ErrorCode` - Specific error variant
-- `ErrorContext` - Error context
+See [api.md → Legacy V1 API](api.md#legacy-v1-api) for usage.
 
 ---
 
 ## See Also
 
-- [API Documentation](./api.md) - Complete API reference
-- [Examples](./examples.md) - Usage examples
-- [Developer Guide](./developer-guide.md) - Parser development
+- [Syntax v2.3 Reference](./syntax-v2.md)
+- [API Reference](./api.md)
+- [Examples](./examples.md)
+- [Developer Guide](./developer-guide.md)
 
 ---
 
 **Version**: 0.4.3
-**Last Updated**: 2025-12-27
+**Last Updated**: 2026-06-11
 **License**: GPL-3.0

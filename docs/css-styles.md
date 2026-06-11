@@ -3,6 +3,8 @@
 **Version**: 0.7.11
 **Date**: 2025-12-27
 
+> **Note**: These classes are emitted by the **V1 renderer** (`createUI` / `render`), which consumes V1 syntax. The V2 parser (`wyreframe/parser/v2`, [syntax v2.3](syntax-v2.md)) does not render yet; this reference will be revised when V2 renderer integration lands.
+
 ---
 
 ## Table of Contents
