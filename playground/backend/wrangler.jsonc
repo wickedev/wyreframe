@@ -1,0 +1,55 @@
+{
+  "name": "wyreframe-backend",
+  "main": "src/Index.mjs",
+  "workers_dev": true,
+  "preview_urls": true,
+  "compatibility_date": "2024-09-23",
+  "compatibility_flags": [
+    "nodejs_compat"
+  ],
+  "routes": [
+    {
+      "pattern": "wyreframe.studio/api/*",
+      "zone_name": "wyreframe.studio"
+    }
+  ],
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1,
+    "logs": {
+      "enabled": true,
+      "head_sampling_rate": 1,
+      "persist": true,
+      "invocation_logs": true
+    },
+    "traces": {
+      "enabled": false,
+      "persist": true,
+      "head_sampling_rate": 1
+    }
+  },
+  "vars": {
+    "ANTHROPIC_BASE_URL": "https://llmux.protopie.works",
+    "ENVIRONMENT": "production",
+    "LANGFUSE_BASE_URL": "https://langfuse.protopie.works"
+  },
+  "r2_buckets": [
+    {
+      "binding": "ASSETS",
+      "bucket_name": "wyreframe-assets"
+    }
+  ],
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_id": "74509cf6-7f08-46a3-beed-452a580fdccc"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "id": "065fd9abde394f2a977790854ad3f340",
+      "binding": "SESSION_KV"
+    }
+  ],
+  "upload_source_maps": true
+}

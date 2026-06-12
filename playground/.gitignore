@@ -1,0 +1,20 @@
+node_modules/
+lib/
+*.bs.js
+*.mjs
+!**/migrations/*.sql
+
+# Recovered raw artifacts — reference only, not source of truth
+_recovered/
+
+# Wrangler / Cloudflare
+.dev.vars
+.wrangler/
+.mf/
+
+# Frontend build
+dist/
+
+# Env
+.env
+.env.local

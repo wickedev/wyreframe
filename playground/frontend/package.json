@@ -1,0 +1,49 @@
+{
+  "name": "wyreframe-playground-frontend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rescript && vite build",
+    "build:res": "rescript",
+    "build:web": "vite build",
+    "dev": "concurrently -k -n RES,VITE -c blue,green \"rescript -w\" \"vite\"",
+    "preview": "vite preview",
+    "deploy": "npm run build && wrangler pages deploy dist --project-name wyreframe-playground"
+  },
+  "devDependencies": {
+    "@rescript/core": "^1.6.1",
+    "@rescript/react": "^0.13.0",
+    "@types/react": "^18.3.0",
+    "@types/react-dom": "^18.3.0",
+    "@vitejs/plugin-react": "^4.3.0",
+    "autoprefixer": "^10.4.0",
+    "concurrently": "^9.0.0",
+    "postcss": "^8.4.0",
+    "rescript": "^11.1.4",
+    "tailwindcss": "^3.4.0",
+    "typescript": "^5.5.0",
+    "vite": "^5.4.0",
+    "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "@monaco-editor/loader": "^1.4.0",
+    "@monaco-editor/react": "^4.6.0",
+    "@radix-ui/react-dialog": "^1.1.0",
+    "@radix-ui/react-label": "^2.1.0",
+    "@radix-ui/react-popover": "^1.1.0",
+    "@radix-ui/react-select": "^2.1.0",
+    "@radix-ui/react-slot": "^1.1.0",
+    "@radix-ui/react-tooltip": "^1.1.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "lottie-react": "^2.4.0",
+    "lucide-react": "^0.460.0",
+    "monaco-editor": "^0.45.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "react-router-dom": "^6.27.0",
+    "tailwind-merge": "^2.5.0",
+    "wyreframe": "file:../.."
+  }
+}

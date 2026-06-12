@@ -1,0 +1,25 @@
+{
+  "name": "wyreframe-backend",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "rescript",
+    "dev": "concurrently -k \"rescript -w\" \"wrangler dev\"",
+    "deploy": "rescript && wrangler deploy",
+    "types": "wrangler types",
+    "d1:migrate": "wrangler d1 migrations apply DB --remote",
+    "d1:migrate:local": "wrangler d1 migrations apply DB --local"
+  },
+  "devDependencies": {
+    "@cloudflare/workers-types": "^4.20251201.0",
+    "@rescript/core": "^1.6.1",
+    "concurrently": "^9.0.0",
+    "rescript": "^11.1.4",
+    "wrangler": "^4.0.0"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^0.30.1",
+    "hono": "^4.12.25"
+  }
+}

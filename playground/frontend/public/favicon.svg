@@ -1,0 +1,22 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" fill="none">
+  <!-- Background -->
+  <rect width="32" height="32" rx="6" fill="#1a1a2e"/>
+
+  <!-- Wireframe grid lines -->
+  <path d="M4 8h24M4 16h24M4 24h24" stroke="#4a4a6a" stroke-width="1" stroke-dasharray="2 2"/>
+  <path d="M8 4v24M16 4v24M24 4v24" stroke="#4a4a6a" stroke-width="1" stroke-dasharray="2 2"/>
+
+  <!-- Main wireframe box -->
+  <rect x="6" y="6" width="20" height="20" rx="2" stroke="#00d9ff" stroke-width="2" fill="none"/>
+
+  <!-- Inner wireframe elements -->
+  <rect x="9" y="9" width="14" height="4" rx="1" stroke="#00d9ff" stroke-width="1.5" fill="none"/>
+  <rect x="9" y="15" width="6" height="8" rx="1" stroke="#ff6b6b" stroke-width="1.5" fill="none"/>
+  <rect x="17" y="15" width="6" height="8" rx="1" stroke="#4ecdc4" stroke-width="1.5" fill="none"/>
+
+  <!-- Corner brackets (ASCII feel) -->
+  <path d="M4 10V6a2 2 0 012-2h4" stroke="#00d9ff" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M28 10V6a2 2 0 00-2-2h-4" stroke="#00d9ff" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M4 22v4a2 2 0 002 2h4" stroke="#00d9ff" stroke-width="1.5" stroke-linecap="round"/>
+  <path d="M28 22v4a2 2 0 01-2 2h-4" stroke="#00d9ff" stroke-width="1.5" stroke-linecap="round"/>
+</svg>
