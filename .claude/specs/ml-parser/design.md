@@ -2,10 +2,15 @@
 
 ## Document Information
 
-- **Version**: 0.1.0 (Exploratory)
+- **Version**: 0.2.0 (Draft)
 - **Created**: 2026-06-12
 - **Status**: Draft / RFC
 - **Relation to V2 Parser**: Complementary — V2 remains the deterministic core; the ML parser is a *robustness layer* targeting inputs that V2 (and humans) can interpret but heuristics cannot recover.
+- **Companion docs**:
+  - `requirements.md` — formal acceptance criteria for the parser's behavior, identity guarantees, and public API
+  - `tasks.md` — phased implementation tasks with dependencies
+  - `self-improvement.md` — training loop architecture (data pipeline, four feedback loops, gold eval)
+- **Cross-spec dependencies**: `syntax-v2-parser`, `v2-renderer`, `v2-ascii-printer`, plus the verifier infrastructure at `src/verifier/`.
 
 ---
 
@@ -311,39 +316,7 @@ parse(input):
 
 ---
 
-## 8. Phased Plan
-
-### Phase 0 — 타당성 (1~2주)
-
-- LLM에게 (scenario → ascii + ast) 페어 100개 요청.
-- 품질 게이트 통과율, AST 정확도 수동 검증.
-- 합격선: 통과율 ≥30%, 통과한 페어의 AST 정확도 ≥95%.
-- Go/No-go 판단.
-
-### Phase 1 — Smoke (2~3주)
-
-- 1k 페어 데이터셋 + 결정적 augmentation 파이프라인.
-- 후보 A (Grid encoder + tree decoder) 와 후보 B (Sequence tagging + CRF) 둘 다 처음부터 학습 (§4.2~§4.4). 두 모델 모두 사전학습 LM 없이.
-- `clean-v2` + `synthetic-broken` 평가.
-- 합격선: `clean-v2` ≥95% AST 일치.
-
-### Phase 2 — MVP (4~6주)
-
-- 50k 페어로 확장.
-- 추론 파이프라인 (V2 → ML fallback) 구현.
-- `real-user` 셋 100개 수집 및 평가.
-- 합격선: `real-user`에서 V2 단독 대비 +20pp 이상 개선.
-
-### Phase 3 — Production (이후)
-
-- 500k+ 데이터셋, 양자화, wasm/ONNX 빌드.
-- 패키지에 옵션 의존성으로 통합 (`@wyreframe/ml-parser`).
-- `parse(input, { ml: true })` 형태 API.
-- Telemetry 기반 어려운 입력 자동 수집 → 재학습 루프.
-
----
-
-## 9. Open Questions
+## 8. Open Questions
 
 1. **AST 직렬화 형식**: JSON, S-expression, custom token vocab 중 학습 효율이 가장 좋은 것은?
 2. **컨테이너 ID 일관성**: ML이 생성한 ID가 입력의 ID와 정확히 같아야 하는가, 의미만 보존하면 되는가?
@@ -355,7 +328,7 @@ parse(input):
 
 ---
 
-## 10. Out of Scope (현재 문서 기준)
+## 9. Out of Scope (현재 문서 기준)
 
 - 자연어 → 와이어프레임 (e.g., "로그인 화면 그려줘" → ASCII).
 - 와이어프레임 → 실제 HTML/Tailwind 코드 생성 (별도 layer; AST → HTML 은 기존 렌더 layer가 담당).
