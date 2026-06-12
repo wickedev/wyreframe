@@ -32,6 +32,15 @@
     },
     "./renderer": {
       "import": "./src/renderer/Renderer.mjs"
+    },
+    "./v2-renderer": {
+      "types": "./src/renderer/v2/V2Renderer.d.ts",
+      "import": "./src/renderer/v2/V2Renderer.mjs"
+    },
+    "./v2-renderer/style.css": "./src/renderer/v2/css/wyreframe-v2.css",
+    "./v2-printer": {
+      "types": "./src/printer/v2/V2Printer.d.ts",
+      "import": "./src/printer/v2/V2Printer.mjs"
     }
   },
   "scripts": {

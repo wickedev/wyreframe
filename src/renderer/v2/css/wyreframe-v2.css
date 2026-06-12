@@ -1,0 +1,56 @@
+/*
+ * wyreframe-v2.css
+ *
+ * Reference stylesheet for the Wyreframe V2 Renderer.
+ *
+ * Implements the layout/alignment table from
+ *   .claude/specs/v2-renderer/design.md §13
+ * and Requirement 7.
+ *
+ * Consumers can opt in via:
+ *   import "wyreframe/v2-renderer/style.css";
+ * or override individual classes.
+ */
+
+/* ---------- Layout primitives ---------- */
+
+.wf-direction-row    { display: flex; flex-direction: row; }
+.wf-direction-column { display: flex; flex-direction: column; }
+.wf-direction-mixed  { display: grid; grid-auto-flow: row; }
+
+.wf-dist-equal         { justify-content: space-evenly;  }
+.wf-dist-space-between { justify-content: space-between; }
+.wf-dist-space-around  { justify-content: space-around;  }
+.wf-dist-start         { justify-content: flex-start;    }
+.wf-dist-end           { justify-content: flex-end;      }
+.wf-dist-center        { justify-content: center;        }
+
+.wf-align-left   { text-align: left;   }
+.wf-align-center { text-align: center; }
+.wf-align-right  { text-align: right;  }
+
+/* ---------- Default visual treatments (opinionated but minimal) ---------- */
+
+.wf-scene     { display: block; }
+.wf-component { display: block; }
+.wf-container { border: 1px solid currentColor; padding: .5rem; box-sizing: border-box; }
+.wf-text      { margin: .25rem 0; }
+.wf-button    { font: inherit; padding: .25rem .75rem; cursor: pointer; }
+.wf-link      { color: inherit; text-decoration: underline; cursor: pointer; }
+.wf-input     { font: inherit; padding: .25rem; box-sizing: border-box; }
+.wf-select    { font: inherit; padding: .25rem; box-sizing: border-box; }
+.wf-checkbox  { display: inline-flex; align-items: center; gap: .25rem; cursor: pointer; }
+.wf-radio     { display: inline-flex; align-items: center; gap: .25rem; cursor: pointer; }
+.wf-divider   { border: none; border-top: 1px solid currentColor; margin: .5rem 0; }
+.wf-divider-bold { border-top-width: 2px; }
+.wf-string    { display: inline; }
+.wf-emoji     { display: inline-block; }
+.wf-error     { color: #c00; outline: 1px dashed #c00; padding: 0 .25rem; }
+.wf-prop-missing  { opacity: .5; font-style: italic; }
+.wf-prop-resolved { display: inline; }
+
+/* ---------- Device hints (consumers may override or remove) ---------- */
+
+.wf-scene.wf-device-mobile  { max-width: 375px; }
+.wf-scene.wf-device-tablet  { max-width: 768px; }
+.wf-scene.wf-device-desktop { max-width: 1280px; }
