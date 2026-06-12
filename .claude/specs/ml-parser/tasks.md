@@ -9,6 +9,20 @@
 
 ---
 
+## Current Status & Pause Point
+
+| | |
+| --- | --- |
+| **Last completed** | P0 prerequisites — V2 Renderer (`e74bdd2`), V2 ASCII Printer (`e74bdd2`), Visual Verifier (`5475252`) |
+| **In progress** | — (paused) |
+| **Next up** | P1 Data Pipeline (LLM corpus collection + labeling). CPU-only; doesn't need GPU. |
+| **Hardware blocker** | P3+ (model training) waits on **NVIDIA DGX Spark setup** (GB10 Grace Blackwell). Until then, only P0–P2 are runnable on a regular machine. |
+| **Resume strategy** | When DGX Spark is online: revisit this file, then either (a) start P1+P2 on dev machine in parallel with DGX setup, or (b) pick up at P3 directly if P1/P2 already done. |
+
+> **Note on parallelizability without DGX Spark**: P1 (LLM API calls), P2 (deterministic noise injection), P0.4 (conformance test), P0.5 (gold eval skeleton) can all proceed without a training GPU. They produce datasets and tooling that P3+ will consume. Whoever resumes this work should check whether those can be advanced first.
+
+---
+
 ## Phase Summary
 
 | Phase | 목적 | Tasks | 합격선 |
