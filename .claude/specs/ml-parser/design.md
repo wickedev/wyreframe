@@ -36,6 +36,7 @@ V2 파서는 strict 문법 기반의 휴리스틱 파서다. 정합한 입력에
 **비목표**:
 - V2 파서를 대체하지 않는다. V2가 성공하면 그 결과를 신뢰한다.
 - 런타임에 LLM을 호출하지 않는다. LLM은 학습 데이터 생성용 *교사* 역할만 한다.
+- **배포 모델 자체가 LLM이 아니다**. 사전학습 언어 모델(ByT5/GPT-class/Llama 등)을 베이스로 fine-tune하지 않는다. 학생은 처음부터 학습한 작은 task-specific 신경망이다 (§4.2).
 - 임의의 자연어를 와이어프레임으로 변환하지 않는다 (이건 별개의 과제).
 - 명시적 정렬/위치 override syntax를 도입하지 않는다 (§11 참조).
 
@@ -43,7 +44,7 @@ V2 파서는 strict 문법 기반의 휴리스틱 파서다. 정합한 입력에
 
 ## 2. High-Level Approach
 
-LLM teacher → small distilled student 패턴.
+LLM teacher (라벨 생성) → 작은 task-specific 학생 모델 (LM 베이스 없이 처음부터 학습) 패턴.
 
 ```
 [1] Data generation (offline, LLM teacher)
@@ -52,10 +53,11 @@ LLM teacher → small distilled student 패턴.
     ├─ Quality gate: multi-vote consistency + reverse render
     └─ Augmentation: deterministic noise injection on canonical ASCII
                 ↓
-[2] Training (offline)
-    └─ Small seq2seq / grid-encoder + AST-decoder
+[2] Training (offline, no pretrained LM)
+    └─ §4.2 후보 A (grid encoder + tree decoder) 또는
+       §4.3 후보 B (sequence tagging + CRF) — 처음부터 학습
                 ↓
-[3] Inference (online, no LLM)
+[3] Inference (online, no LLM, no LM weights)
     ├─ V2 파서 시도
     ├─ V2 실패 / containsErrorRecovery=true → ML 파서 보조
     └─ Confidence threshold 미만이면 원래 V2 에러 반환
@@ -190,30 +192,46 @@ LLM에게 "어떤 UI를 그릴지" 다양성을 강제하기 위한 메타 변�
 
 **Tree structure는 별도**: AST의 노드 트리 자체는 sequence/tree decoder가 생성하고, 위 카테고리들은 각 노드의 "라벨"로 부착된다.
 
-### 4.2 후보 A: Byte-level seq2seq (권장 1순위)
+### 4.2 모델 후보 — 정체성 제약
 
-- **인코더**: ByT5-small (300M) 또는 더 작은 byte transformer.
-- **디코더**: AST를 JSON-like 직렬화 형태로 토큰 단위 생성.
-- **장점**: ASCII는 본질적으로 바이트 스트림. tokenization 이슈 없음. 구현 단순.
-- **단점**: 긴 와이어프레임 처리 시 시퀀스 길이 부담.
+§1.1의 정체성에 따라 **배포되는 모델은 LLM이 아니다**. LLM은 학습 데이터 생성용 *교사*로만 등장하며(§3), 런타임 추론에는 절대 호출되지 않는다. 배포 산출물은 *작은, 처음부터 학습한, task-specific 신경망*이다. 따라서 후보 아키텍처는 모두 다음 조건을 만족한다:
 
-### 4.3 후보 B: Grid encoder + tree decoder
+- 사전학습된 언어 모델(ByT5, GPT-class, Llama 등)을 *베이스*로 쓰지 않는다.
+- 단일 와이어프레임 추론이 결정적이고 빠르다 (브라우저/노드 wasm 추론 기준 < 100ms 목표).
+- 양자화/증류 후 모바일/엣지 배포 가능 크기 (수십 MB 이하 목표).
 
-- **인코더**: ASCII를 (rows × cols) 2D 그리드로 보고 CNN 또는 grid-axial transformer.
-- **디코더**: AST를 트리 노드 시퀀스로 autoregressive 생성.
-- **장점**: 2D 정렬 정보가 자연스럽게 인코딩됨. V2의 "wall alignment" 직관과 일치.
-- **단점**: 구현 복잡, 2D positional encoding 튜닝 필요.
+### 4.3 후보 A: Grid encoder + tree decoder (권장 1순위)
 
-### 4.4 후보 C: Small LLM fine-tune
+- **인코더**: ASCII를 (rows × cols) 2D 그리드 입력. 각 셀의 문자 임베딩 → axial transformer 또는 작은 CNN backbone (e.g. ConvNeXt-tiny 규모).
+- **디코더**: V2 AST를 깊이 우선 순회 순서로 토큰화하여 autoregressive 생성. 각 노드 위치에서 §4.1 카테고리들의 softmax 분포 동시 출력.
+- **장점**: 2D 정렬 신호(같은 열의 `|`가 정렬되어야 한다 등)가 인코딩 단계에 자연스럽게 들어감. V2 휴리스틱의 "wall alignment" 직관과 일치.
+- **단점**: 구현 복잡 (2D positional encoding, axial attention 튜닝). 트리 디코더 학습 안정화 필요.
+- **규모 목표**: 10~50M 파라미터.
 
-- **베이스**: Qwen-0.5B / Llama-3.2-1B / Phi-3-mini 등.
-- **방법**: LoRA fine-tune on (ascii, ast) pairs.
-- **장점**: 가장 빠르게 baseline 확보 가능. 일반화 잠재력 큼.
-- **단점**: 1B 모델도 브라우저/노드 inference에는 부담. 양자화 필요.
+### 4.4 후보 B: Sequence tagging (BiLSTM-CRF / 작은 transformer)
 
-### 4.5 결정 기준
+- **모델**: 각 (row, col) 셀을 토큰으로 보고 시퀀스 태그 예측. `border-h / border-v / corner / interior / text / button-bracket / ...` 같은 토큰 vocabulary.
+- **상위 레이어**: CRF 또는 transition matrix가 *구조적 제약*("벽은 닫혀야", "코너는 4개 모여 사각형") 을 인코딩.
+- **후처리**: 태그 시퀀스를 결정적 규칙으로 AST로 조립 (V2 휴리스틱의 일부를 재활용).
+- **장점**: 모델이 작음 (1~5M 파라미터 가능). 학습 안정. 추론이 거의 결정적. wasm 추론 최적.
+- **단점**: AST 트리 구조가 후처리 단계로 분리되어 end-to-end 학습 신호가 약함. 복잡한 중첩에서 후처리 규칙이 발목 잡힐 수 있음.
 
-MVP 단계에서 **A와 C를 병행 학습**해 동일 평가셋에서 비교. 더 작고 빠른 쪽을 선택. B는 A가 시퀀스 길이로 인해 실패할 경우 backup.
+### 4.5 후보 C: Neurosymbolic — V2 파서 임계값을 학습 파라미터로
+
+- **방법**: V2 휴리스틱의 임계값(허용 정렬 오차, recovery 우선순위, distribution 판별 cut-off 등)을 *학습 가능한* 실수 파라미터로 재구성. 미분 가능한 soft-relaxation을 통해 (ascii, ast) 페어로 fine-tune.
+- **장점**: 코드 변화 최소. V2 파서의 정확성과 결정성을 그대로 상속하면서 *long-tail 케이스의 임계값만* 데이터로 보정. 모델 사이즈가 거의 0 (수백~수천 파라미터).
+- **단점**: V2가 *애초에 시도조차 못 한* 깨진 입력에는 무력. 휴리스틱 구조 자체의 limitation을 넘지 못함. 가장 보수적 옵션.
+- **위상**: A/B의 backup 또는 hybrid 구성요소로 (V2 우선 → ML B 후보 → ML A 후보 fallback chain).
+
+### 4.6 결정 기준
+
+MVP에서 **A와 B를 병행 학습**, 동일 평가셋(`design.md §6.2` 메트릭)에서 비교:
+
+- B가 `clean-v2` + `synthetic-broken` 셋에서 충분한 성능을 내고 추론 비용이 압도적으로 낮다면 **B 채택**.
+- B가 깊은 중첩/모호 정렬에서 무너지고 A가 뚜렷이 이긴다면 **A 채택**.
+- 둘 다 부족하면 C를 baseline anchor로 두고 A의 학습 데이터를 더 부어 본다.
+
+C는 별도 trace로 항상 enable 가능한 *공짜 회복* 경로 — V2 파서가 이미 있으므로 추가 비용 거의 0.
 
 ---
 
@@ -305,7 +323,7 @@ parse(input):
 ### Phase 1 — Smoke (2~3주)
 
 - 1k 페어 데이터셋 + 결정적 augmentation 파이프라인.
-- ByT5-small 또는 Qwen-0.5B 둘 다 LoRA 학습.
+- 후보 A (Grid encoder + tree decoder) 와 후보 B (Sequence tagging + CRF) 둘 다 처음부터 학습 (§4.2~§4.4). 두 모델 모두 사전학습 LM 없이.
 - `clean-v2` + `synthetic-broken` 평가.
 - 합격선: `clean-v2` ≥95% AST 일치.
 
