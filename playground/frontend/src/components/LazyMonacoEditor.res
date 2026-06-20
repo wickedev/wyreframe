@@ -9,7 +9,7 @@
 %%raw(`
   import loader from "@monaco-editor/loader";
   loader.config({
-    paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" },
+    paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.55.1/min/vs" },
   });
 `)
 
@@ -94,7 +94,8 @@ let defineTheme: (Js.Json.t, string, themeDef) => unit = %raw(`
   function(monaco, name, theme) { monaco.editor.defineTheme(name, theme); }
 `)
 
-let registerThemes = (monaco: Js.Json.t): unit => {
+// Register the custom wireframe themes against the Monaco instance, once.
+let registerThemes = (monaco: Js.Json.t): unit =>
   if !themesRegistered.contents {
     try {
       defineTheme(monaco, "wireframe-dark", wireframeDarkTheme)
@@ -105,7 +106,6 @@ let registerThemes = (monaco: Js.Json.t): unit => {
     | exn => Console.error2("[Monaco] Failed to register themes:", exn)
     }
   }
-}
 
 // --- Lazy boundary ----------------------------------------------------------
 
@@ -120,19 +120,27 @@ type editorProps = {
   width: string,
 }
 
-let lazyMonacoEditor: React.component<editorProps> = React.lazy_(async () => {
-  let mod: {..} = %raw(`import("@monaco-editor/react")`)
-  let default: React.component<editorProps> = mod["default"]
-  default
-})
+// React.lazy(() => import("@monaco-editor/react")) — dynamic chunk so Monaco
+// is only fetched when an editor is actually rendered. The dynamic import
+// resolves to the module namespace `{default: Editor, ...}`, which is exactly
+// the shape React.lazy expects.
+@module("react")
+external reactLazy: (
+  unit => promise<{"default": React.component<editorProps>}>
+) => React.component<editorProps> = "lazy"
+
+let importMonacoEditor: unit => promise<{"default": React.component<editorProps>}> = %raw(`
+  () => import("@monaco-editor/react")
+`)
+
+let lazyMonacoEditor: React.component<editorProps> = reactLazy(importMonacoEditor)
 
 // --- Skeleton fallback ------------------------------------------------------
 
-module Skeleton = {
+module EditorSkeleton = {
   @react.component
-  let make = (~width: string="100%", ~height: string="100%") => {
-    let style: JsxDOMStyle.t = {height, width}
-    <div className="relative bg-muted/30 rounded-md overflow-hidden" style>
+  let make = (~width: string="100%", ~height: string="100%") =>
+    <div className="relative bg-muted/30 rounded-md overflow-hidden" style={{height, width}}>
       <div className="absolute inset-0 flex flex-col gap-2 p-4">
         <div className="flex gap-3">
           <Skeleton className="h-4 w-8" /> <Skeleton className="h-4 flex-1" />
@@ -157,14 +165,13 @@ module Skeleton = {
         <div className="text-sm text-muted-foreground"> {React.string("Loading editor...")} </div>
       </div>
     </div>
-  }
 }
 
 // --- Error fallback ---------------------------------------------------------
 
 module ErrorFallback = {
   @react.component
-  let make = () =>
+  let make = (~error: option<Js.Exn.t>=?) =>
     <div
       className="h-full w-full flex items-center justify-center bg-destructive/10 rounded-md p-4">
       <div className="text-center max-w-md">
@@ -174,6 +181,18 @@ module ErrorFallback = {
         <p className="text-sm text-muted-foreground mb-4">
           {React.string("The code editor failed to load. Please refresh the page to try again.")}
         </p>
+        {switch error {
+        | Some(err) =>
+          <details className="text-xs text-left bg-muted p-2 rounded">
+            <summary className="cursor-pointer font-medium mb-1">
+              {React.string("Error details")}
+            </summary>
+            <pre className="whitespace-pre-wrap">
+              {React.string(Js.Exn.message(err)->Option.getOr("Unknown error"))}
+            </pre>
+          </details>
+        | None => React.null
+        }}
       </div>
     </div>
 }
@@ -191,14 +210,15 @@ module ErrorBoundary = {
 @react.component
 let make = (
   ~value: string,
-  ~onChange: option<string => unit>=?,
-  ~language: string="plaintext",
-  ~theme: string="vs-dark",
+  ~language: string,
+  ~theme: string,
+  ~options: option<Js.Json.t>=?,
+  ~onChange: option<option<string> => unit>=?,
+  ~onMount: option<(Js.Json.t, Js.Json.t) => unit>=?,
   ~height: string="100%",
   ~width: string="100%",
-  ~options: option<Js.Json.t>=?,
-  ~onMount: option<(Js.Json.t, Js.Json.t) => unit>=?,
 ) => {
+  // onMount: register the wireframe themes, then forward to the caller's hook.
   let handleMount = React.useCallback1((editor, monaco) => {
     registerThemes(monaco)
     switch onMount {
@@ -207,10 +227,10 @@ let make = (
     }
   }, [onMount])
 
-  // Monaco's onChange gives (option<string>, event) — collapse to string => unit
-  // by treating None as empty string, matching the original bundle.
+  // Monaco emits the raw editor value (possibly undefined); collapse it into an
+  // option<string> before handing it to the caller — mirrors `map$2`.
   let handleChange = switch onChange {
-  | Some(cb) => Some((v, _ev) => cb(v->Option.getOr("")))
+  | Some(cb) => Some((v: option<string>, _ev: Js.Json.t) => cb(v))
   | None => None
   }
 
@@ -226,7 +246,7 @@ let make = (
   }
 
   <ErrorBoundary fallback={<ErrorFallback />}>
-    <React.Suspense fallback={<Skeleton width height />}>
+    <React.Suspense fallback={<EditorSkeleton height width />}>
       {React.createElement(lazyMonacoEditor, props)}
     </React.Suspense>
   </ErrorBoundary>

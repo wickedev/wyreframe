@@ -73,10 +73,10 @@ Newer `create-cloudflare` versions reject `--type=pre-existing`; pin to
   React component identifiers preserved in the bundle.
 - Likely page/layout components: `LandingPage`, `PlaygroundLayout`, `Header`,
   `ErrorBoundary`, `LazyMonacoEditor`.
-- UI strings preserved in bundle (Korean):
-  - "또는 로컬 환경에서 OAuth 로그인:"
-  - "위에서 OAuth 토큰을 추가해주세요"
-  - "⚠️ OAuth는 localhost에서만 작동합니다"
+- UI strings preserved in bundle (originally localized; translated to English):
+  - "Or sign in with OAuth locally:"
+  - "Add an OAuth token above"
+  - "OAuth only works on localhost"
 - Built-in prompt examples preserved:
   - "Build a user profile card with avatar, name, bio, stats, and action buttons"
   - "Design a pricing table with 3 tiers: Free, Pro, and Enterprise with feature comparisons"

@@ -1,11 +1,11 @@
 // ASCII grid editor — wraps Monaco (via LazyMonacoEditor) and overlays the
-// wyreframe V1 parser's error + warning decorations. Persists content into
-// the per-session localStorage slot used by the rest of the app.
+// wyreframe parser's error + warning decorations, persisting content into the
+// per-session localStorage slot used by the rest of the app.
 
 // ---------------------------------------------------------------------------
-// Parser result shapes (V1 parser, matches the bundled `wyreframe` library).
-// Both parse errors and parse warnings carry the same `{message,line,column}`
-// shape — line/column may be undefined for whole-document issues.
+// Parser result shapes. The bundled `wyreframe` parser returns a tagged
+// Result<Success, Error>; both warnings and parse errors carry the same
+// `{message, line, column}` issue shape (line/column optional).
 // ---------------------------------------------------------------------------
 
 type parseIssue = {
@@ -14,9 +14,6 @@ type parseIssue = {
   column: option<int>,
 }
 
-// `Wyreframe.parse` returns a tagged-variant Result<Success, Error>. We hold
-// the raw return as an opaque object and classify it manually — this avoids
-// fighting ReScript variant marshaling when the JS side ships inline records.
 type parseSuccess = {warnings: array<parseIssue>}
 
 type parseResult =
@@ -27,10 +24,10 @@ type parseResult =
 
 let classifyParse = (raw: {..}): parseResult => {
   let tag: string = raw["TAG"]
-  let payload = raw["_0"]
   if tag === "Success" {
-    Success({warnings: payload["warnings"]})
+    Success({warnings: raw["_0"]["warnings"]})
   } else {
+    let payload = raw["_0"]
     ParseError({
       message: payload["message"],
       line: payload["line"]->Nullable.toOption,
@@ -40,26 +37,22 @@ let classifyParse = (raw: {..}): parseResult => {
 }
 
 // ---------------------------------------------------------------------------
-// Monaco editor surface — we hold an opaque editor instance and a decoration
-// id array. All Monaco interop happens via %raw.
+// Monaco editor surface — opaque editor instance + decoration-id array. All
+// Monaco interop happens via %raw, matching the deployed bundle.
 // ---------------------------------------------------------------------------
 
 type monacoEditor
-type monacoInstance
 
+// createErrorDecoration + applyErrorDecorations, ported verbatim from the
+// bundle. `applyErrorDecorations(editor, prevIds, firstError, warnings)`:
+//   - prefers the warnings array; falls back to [firstError]; else clears.
 let applyErrorDecorations: (
   monacoEditor,
   array<string>,
   option<parseIssue>,
-  array<parseIssue>,
+  option<array<parseIssue>>,
 ) => array<string> = %raw(`function(editor, prevIds, firstError, warnings) {
-  var issues = (warnings && warnings.length > 0)
-    ? warnings
-    : (firstError !== undefined ? [firstError] : []);
-  if (issues.length === 0) {
-    return editor.deltaDecorations(prevIds, []);
-  }
-  var decos = issues.map(function(e) {
+  function createErrorDecoration(e) {
     var line = (e.line == null) ? 1 : e.line;
     var col = (e.column == null) ? 1 : e.column;
     return {
@@ -67,7 +60,7 @@ let applyErrorDecorations: (
         startLineNumber: line,
         startColumn: col,
         endLineNumber: line,
-        endColumn: col + 10
+        endColumn: (col + 10) | 0
       },
       options: {
         isWholeLine: false,
@@ -77,18 +70,27 @@ let applyErrorDecorations: (
         inlineClassName: "monaco-error-inline"
       }
     };
-  });
+  }
+  var issues = (warnings !== undefined)
+    ? (warnings.length > 0 ? warnings : (firstError !== undefined ? [firstError] : []))
+    : (firstError !== undefined ? [firstError] : []);
+  if (issues.length <= 0) {
+    return editor.deltaDecorations(prevIds, []);
+  }
+  var decos = issues.map(createErrorDecoration);
   return editor.deltaDecorations(prevIds, decos);
 }`)
 
 // ---------------------------------------------------------------------------
-// Editor language + theme constants. The "wireframe" language id and the
-// dark/light theme names mirror the original deployed playground bundle.
+// Editor language + theme + default options. The "wireframe" language id and
+// the dark/light theme names mirror the deployed playground bundle.
 // ---------------------------------------------------------------------------
 
 let languageId = "wireframe"
 
-let themeName = (isDark: bool) => isDark ? "wireframe-dark" : "wireframe-light"
+let getLanguageId = () => languageId
+
+let getThemeName = (isDark: bool) => isDark ? "wireframe-dark" : "wireframe-light"
 
 type editorOptions = {
   language: string,
@@ -105,9 +107,9 @@ type editorOptions = {
   quickSuggestions: bool,
 }
 
-let defaultOptions = (isDark: bool): editorOptions => {
+let createDefaultOptions = (isDark: bool): editorOptions => {
   language: languageId,
-  theme: themeName(isDark),
+  theme: isDark ? "wireframe-dark" : "wireframe-light",
   minimap: {"enabled": false},
   fontSize: 14,
   lineNumbers: "on",
@@ -121,13 +123,14 @@ let defaultOptions = (isDark: bool): editorOptions => {
 }
 
 // ---------------------------------------------------------------------------
-// Tiny debounce helper. We keep the timeout id in a ref so the cleanup effect
-// can cancel any pending work on unmount.
+// Debounce helper, ported from the bundle's `createDebounced` / `clearDebounce`.
+// State (timeout id) lives in a closure-local record per debounced fn.
 // ---------------------------------------------------------------------------
 
 type debounceState = {mutable timeoutId: option<Js.Global.timeoutId>}
 
-let createDebounced = (fn: 'a => unit, delay: int, state: debounceState): ('a => unit) => {
+let createDebounced = (fn: 'a => unit, delay: int): ('a => unit) => {
+  let state = {timeoutId: None}
   arg => {
     switch state.timeoutId {
     | Some(id) => Js.Global.clearTimeout(id)
@@ -151,46 +154,42 @@ let clearDebounce = (state: debounceState) => {
 }
 
 // ---------------------------------------------------------------------------
-// Per-session ASCII content persistence. We only touch the `asciiContent`
-// slice of the stored blob — every other field is preserved or defaulted so
-// the SessionManager module owned by other agents stays compatible.
+// Per-session content persistence. Mirrors the bundle's SessionManager flow:
+// load the existing session and overwrite only `asciiContent`/`lastUpdated`,
+// preserving every other field; if none exists, create a default session.
+// Kept inline (no SessionManager module is exported to the frontend).
 // ---------------------------------------------------------------------------
 
 let sessionKeyPrefix = "wyreframe_session_"
 
-let persistAscii: (string, string) => unit = %raw(`function(sessionId, asciiContent) {
+let saveAsciiContent: (string, string) => unit = %raw(`function(sessionId, asciiContent) {
   try {
     var key = "wyreframe_session_" + sessionId;
     var now = Date.now();
     var existing = window.localStorage.getItem(key);
-    var data;
+    var data = null;
     if (existing != null) {
-      try {
-        data = JSON.parse(existing);
-      } catch (e) {
-        data = null;
-      }
+      try { data = JSON.parse(existing); } catch (e) { data = null; }
     }
-    if (data == null || typeof data !== "object") {
+    if (data != null && typeof data === "object") {
+      data.asciiContent = asciiContent;
+      data.lastUpdated = now;
+    } else {
       data = {
         sessionId: sessionId,
         asciiContent: asciiContent,
         chatHistory: [],
         viewportState: {
-          current: "desktop",
+          current: "Mobile",
           zoom: 1,
-          dimensions: { width: 1440, height: 900 }
+          dimensions: { width: 375, height: 773 }
         },
         lastUpdated: now,
         createdAt: now
       };
-    } else {
-      data.asciiContent = asciiContent;
-      data.lastUpdated = now;
     }
     window.localStorage.setItem(key, JSON.stringify(data));
   } catch (err) {
-    // Swallow storage errors (quota etc.) — the editor must keep working.
     if (typeof console !== "undefined") {
       console.warn("[AsciiEditor] failed to persist session", err);
     }
@@ -217,18 +216,15 @@ let make = (
 
   // Debounced session-storage write — fires 300ms after the last edit.
   let saveDebounced = React.useMemo0(() => {
-    let state = {timeoutId: None}
-    createDebounced((content: string) => persistAscii(sessionId, content), 300, state)
+    createDebounced((content: string) => saveAsciiContent(sessionId, content), 300)
   })
 
-  // Debounced parser pass — runs the V1 parser, then surfaces the first
-  // warning (or the parse error) to both local state and the parent via
-  // `onError`. The parent decides what to do with it.
+  // Debounced parser pass — runs the parser, surfaces the first warning (or
+  // the parse error) to local state and to the parent via `onError`, then
+  // emits the content through `onChange`.
   let parseDebounced = React.useMemo0(() => {
-    let state = {timeoutId: None}
     createDebounced((content: string) => {
-      let result = classifyParse(parse(content))
-      switch result {
+      switch classifyParse(parse(content)) {
       | Success({warnings: ws}) =>
         setWarnings(_ => ws)
         switch ws[0] {
@@ -245,58 +241,54 @@ let make = (
         onError(Some(err))
       }
       onChange(content)
-    }, 300, state)
+    }, 300)
   })
 
-  // Cancel any pending debounce on unmount so we don't fire setState on a
-  // dead component.
-  React.useEffect0(() => {
-    Some(() => clearDebounce(debounceRef.current))
-  })
-
-  // Re-apply Monaco decorations whenever the warning set, error or editor
-  // instance changes.
+  // Re-apply Monaco decorations whenever the warning set or editor instance
+  // changes. decorationIds is intentionally not a dependency — deltaDecorations
+  // already does the previous-id bookkeeping, avoiding a self-triggering loop.
   React.useEffect2(() => {
     switch editorRef {
     | None => ()
     | Some(editor) =>
       let nextIds =
         Array.length(warnings) > 0
-          ? applyErrorDecorations(editor, decorationIds, firstError, warnings)
-          : applyErrorDecorations(editor, decorationIds, firstError, [])
+          ? applyErrorDecorations(editor, decorationIds, firstError, Some(warnings))
+          : applyErrorDecorations(editor, decorationIds, firstError, None)
       setDecorationIds(_ => nextIds)
     }
     None
-    // eslint-disable-next-line — decorationIds intentionally omitted to avoid
-    // a self-triggering loop; the deltaDecorations call already handles the
-    // previous-id bookkeeping.
   }, (warnings, editorRef))
 
-  let handleMount = (editor: monacoEditor, _monaco: monacoInstance) => {
-    setEditorRef(_ => Some(editor))
+  // Cancel any pending debounce on unmount.
+  React.useEffect0(() => {
+    Some(() => clearDebounce(debounceRef.current))
+  })
+
+  let handleMount = (editor: Js.Json.t, _monaco: Js.Json.t) => {
+    setEditorRef(_ => Some((Obj.magic(editor): monacoEditor)))
   }
 
-  let handleChange = (next: option<string>, _ev: 'a) => {
-    switch next {
-    | None => ()
-    | Some(content) =>
-      onChange(content)
-      parseDebounced(content)
-      saveDebounced(content)
-    }
+  // LazyMonacoEditor forwards Monaco's `option<string>` value (None on clear).
+  let handleChange = (value: option<string>) => {
+    let content = value->Option.getOr("")
+    onChange(content)
+    parseDebounced(content)
+    saveDebounced(content)
   }
 
-  let options = defaultOptions(isDark)
+  let options = createDefaultOptions(isDark)
 
   <div className="h-full w-full">
-    <Monaco
+    <LazyMonacoEditor
       value
-      language=languageId
-      theme={themeName(isDark)}
-      options
+      language={getLanguageId()}
+      theme={getThemeName(isDark)}
+      options={Obj.magic(options)}
       onChange=handleChange
       onMount=handleMount
       height="100%"
+      width="100%"
     />
   </div>
 }

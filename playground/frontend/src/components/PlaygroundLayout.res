@@ -1,5 +1,5 @@
 // Playground shell — header bar + responsive 3-pane workspace (editor / preview / chat).
-// Switches between Desktop (3 resizable columns), Tablet (tabs + collapsible chat) and Mobile (full-width tabs).
+// Desktop: three resizable columns. Tablet: tabs + collapsible chat. Mobile: full-width tabs.
 
 @val @scope("window") external innerWidth: int = "innerWidth"
 @val @scope("window") external addWindowListener: (string, 'a => unit) => unit = "addEventListener"
@@ -14,16 +14,6 @@ function setBodyUserSelect(v) { document.body.style.userSelect = v; }
 @val external setBodyUserSelect: string => unit = "setBodyUserSelect"
 
 type mouseEvt = {clientX: int}
-
-// Local icon bindings — keep this file self-contained while Lucide.res is in flux.
-module PackageIcon = {
-  @module("lucide-react") @react.component
-  external make: (~size: int=?, ~className: string=?) => React.element = "Package"
-}
-module GithubIcon = {
-  @module("lucide-react") @react.component
-  external make: (~size: int=?, ~className: string=?) => React.element = "Github"
-}
 
 type layoutMode = Desktop | Tablet | Mobile
 
@@ -168,9 +158,7 @@ module NavBar = {
           <span
             className="animate-ping absolute inline-flex h-full w-full rounded-full bg-[hsl(120_70%_50%)] opacity-75"
           />
-          <span
-            className="relative inline-flex rounded-full h-2 w-2 bg-[hsl(120_70%_50%)]"
-          />
+          <span className="relative inline-flex rounded-full h-2 w-2 bg-[hsl(120_70%_50%)]" />
         </span>
         <span className="text-xs text-muted-foreground hidden sm:block">
           {React.string("Live")}
@@ -182,7 +170,7 @@ module NavBar = {
           href="https://www.npmjs.com/package/wyreframe"
           rel="noopener noreferrer"
           target="_blank">
-          <PackageIcon size={18} />
+          <Lucide.Package size={18} />
         </a>
         <a
           className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-[hsl(220_20%_95%/0.08)]"
@@ -190,7 +178,7 @@ module NavBar = {
           href="https://github.com/wickedev/wyreframe"
           rel="noopener noreferrer"
           target="_blank">
-          <GithubIcon size={18} />
+          <Lucide.Github size={18} />
         </a>
       </div>
     </nav>
@@ -215,36 +203,10 @@ module ResizeHandle = {
   }
 }
 
-// Section-card shell — header + content body. Used by every panel.
-module Panel = {
-  @react.component
-  let make = (~title: React.element, ~contentClassName: string="", ~children: React.element) =>
-    <div className="h-full rounded-none border-0 flex flex-col bg-transparent">
-      <div className="panel-header flex-shrink-0 flex flex-col space-y-1.5 p-6">
-        <div
-          className="font-semibold leading-none tracking-tight text-sm flex items-center gap-2 text-[hsl(220_20%_80%)]">
-          title
-        </div>
-      </div>
-      <div
-        className={Cn.cn([
-          "p-0 flex-1 overflow-hidden panel-content panel-inset",
-          contentClassName,
-        ])}>
-        children
-      </div>
-    </div>
-}
-
 let editorIcon =
   <span
     className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[hsl(265_90%_65%/0.15)] text-[hsl(265_90%_65%)]">
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg">
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         d="M10 20l4-16m4 4l4 4-4 4M6 16l-4-4 4-4"
         strokeLinecap="round"
@@ -257,12 +219,7 @@ let editorIcon =
 let previewIcon =
   <span
     className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[hsl(200_90%_50%/0.2)] text-[hsl(200_90%_65%)]">
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg">
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"
         strokeLinecap="round"
@@ -281,12 +238,7 @@ let previewIcon =
 let chatIcon =
   <span
     className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[hsl(320_90%_60%/0.2)] text-[hsl(320_90%_70%)]">
-    <svg
-      className="w-3.5 h-3.5"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg">
+    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
         strokeLinecap="round"
@@ -299,12 +251,7 @@ let chatIcon =
 let chatIconSmall =
   <span
     className="inline-flex items-center justify-center w-5 h-5 rounded bg-[hsl(320_90%_60%/0.15)] text-[hsl(320_90%_70%)]">
-    <svg
-      className="w-3 h-3"
-      fill="none"
-      stroke="currentColor"
-      viewBox="0 0 24 24"
-      xmlns="http://www.w3.org/2000/svg">
+    <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
       <path
         d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
         strokeLinecap="round"
@@ -344,66 +291,70 @@ module DesktopLayout = {
         <div
           className="panel-border-right flex flex-col relative"
           style={width: Float.toString(widths.editor) ++ "%"}>
-          <Panel
-            title={<>
-              editorIcon
-              {React.string("ASCII Editor")}
-            </>}>
-            editorSection
-          </Panel>
-          <ResizeHandle
-            isResizing onMouseDown={e => startResize(Left, e)}
-          />
+          <Card className="h-full rounded-none border-0 flex flex-col bg-transparent">
+            <Card.Header className="panel-header flex-shrink-0">
+              <Card.Title
+                className="text-sm font-medium flex items-center gap-2 text-[hsl(220_20%_80%)]">
+                <> {editorIcon} {React.string("ASCII Editor")} </>
+              </Card.Title>
+            </Card.Header>
+            <Card.Content className="p-0 flex-1 overflow-hidden panel-content panel-inset">
+              {editorSection}
+            </Card.Content>
+          </Card>
+          <ResizeHandle isResizing onMouseDown={e => startResize(Left, e)} />
         </div>
         // Preview column
         <div
           className="panel-border-right flex flex-col relative"
           style={width: Float.toString(widths.preview) ++ "%"}>
-          <div className="h-full rounded-none border-0 flex flex-col bg-transparent">
-            <div className="panel-header flex-shrink-0 flex flex-col space-y-1.5 p-6">
-              <div
-                className="font-semibold leading-none tracking-tight text-sm flex items-center justify-between w-full text-[hsl(220_20%_80%)]">
-                <div className="flex items-center gap-2">
-                  previewIcon
-                  {React.string("Live Preview")}
-                  {switch sceneTitle {
-                  | Some(t) =>
-                    <span className="text-xs text-muted-foreground font-normal">
-                      {React.string("(" ++ t ++ ")")}
+          <Card className="h-full rounded-none border-0 flex flex-col bg-transparent">
+            <Card.Header className="panel-header flex-shrink-0">
+              <Card.Title
+                className="text-sm font-medium flex items-center justify-between w-full text-[hsl(220_20%_80%)]">
+                <>
+                  <div className="flex items-center gap-2">
+                    {previewIcon}
+                    {React.string("Live Preview")}
+                    {switch sceneTitle {
+                    | Some(t) =>
+                      <span className="text-xs text-muted-foreground font-normal">
+                        {React.string("(" ++ t ++ ")")}
+                      </span>
+                    | None => React.null
+                    }}
+                  </div>
+                  {switch previewViewportInfo {
+                  | Some(info) =>
+                    <span className="text-xs text-muted-foreground font-mono">
+                      {React.string(info)}
                     </span>
                   | None => React.null
                   }}
-                </div>
-                {switch previewViewportInfo {
-                | Some(info) =>
-                  <span className="text-xs text-muted-foreground font-mono">
-                    {React.string(info)}
-                  </span>
-                | None => React.null
-                }}
-              </div>
-            </div>
-            <div
+                </>
+              </Card.Title>
+            </Card.Header>
+            <Card.Content
               className="p-0 flex-1 overflow-hidden panel-content panel-inset flex items-center justify-center">
-              previewSection
-            </div>
-          </div>
-          <ResizeHandle
-            isResizing onMouseDown={e => startResize(Right, e)}
-          />
+              {previewSection}
+            </Card.Content>
+          </Card>
+          <ResizeHandle isResizing onMouseDown={e => startResize(Right, e)} />
         </div>
         // Chat column
-        <div
-          className="flex flex-col"
-          style={width: Float.toString(widths.chat) ++ "%"}>
-          <Panel
-            title={<>
-              chatIcon
-              {React.string("AI Assistant")}
-            </>}
-            contentClassName="flex flex-col">
-            chatSection
-          </Panel>
+        <div className="flex flex-col" style={width: Float.toString(widths.chat) ++ "%"}>
+          <Card className="h-full rounded-none border-0 flex flex-col bg-transparent">
+            <Card.Header className="panel-header flex-shrink-0">
+              <Card.Title
+                className="text-sm font-medium flex items-center gap-2 text-[hsl(220_20%_80%)]">
+                <> {chatIcon} {React.string("AI Assistant")} </>
+              </Card.Title>
+            </Card.Header>
+            <Card.Content
+              className="p-0 flex-1 overflow-hidden panel-content panel-inset flex flex-col">
+              {chatSection}
+            </Card.Content>
+          </Card>
         </div>
       </div>
     </div>
@@ -411,8 +362,6 @@ module DesktopLayout = {
 }
 
 module TabletLayout = {
-  type tab = Editor | Preview
-
   @react.component
   let make = (
     ~editorSection: React.element,
@@ -421,16 +370,7 @@ module TabletLayout = {
     ~sceneTitle as _: option<string>=?,
   ) => {
     let (chatOpen, setChatOpen) = React.useState(() => false)
-    let (active, setActive) = React.useState(() => Preview)
-
-    let tabClass = (selected: bool, activeColor: string) =>
-      "flex-1 py-3 px-4 text-sm font-medium transition-colors " ++ (
-        selected
-          ? "text-[hsl(" ++ activeColor ++ ")] border-b-2 border-[hsl(" ++ activeColor ++ ")]"
-          : "text-[hsl(220_20%_60%)] hover:text-[hsl(220_20%_80%)]"
-      )
-
-    let mainPane = active == Editor ? editorSection : previewSection
+    let (active, setActive) = React.useState(() => "preview")
 
     <div
       className="h-screen flex flex-col gradient-mesh relative overflow-hidden playground-mono">
@@ -446,13 +386,21 @@ module TabletLayout = {
       <div className="flex-1 flex flex-col overflow-hidden relative z-0">
         <div className="flex border-b border-[hsl(220_20%_95%/0.08)] glass-strong">
           <button
-            className={tabClass(active == Editor, "265_90%_60%")}
-            onClick={_ => setActive(_ => Editor)}>
+            className={"flex-1 py-3 px-4 text-sm font-medium transition-colors " ++ (
+              active == "editor"
+                ? "text-[hsl(265_90%_60%)] border-b-2 border-[hsl(265_90%_60%)]"
+                : "text-[hsl(220_20%_60%)] hover:text-[hsl(220_20%_80%)]"
+            )}
+            onClick={_ => setActive(_ => "editor")}>
             {React.string("Editor")}
           </button>
           <button
-            className={tabClass(active == Preview, "200_90%_60%")}
-            onClick={_ => setActive(_ => Preview)}>
+            className={"flex-1 py-3 px-4 text-sm font-medium transition-colors " ++ (
+              active == "preview"
+                ? "text-[hsl(200_90%_60%)] border-b-2 border-[hsl(200_90%_60%)]"
+                : "text-[hsl(220_20%_60%)] hover:text-[hsl(220_20%_80%)]"
+            )}
+            onClick={_ => setActive(_ => "preview")}>
             {React.string("Preview")}
           </button>
           <button
@@ -462,12 +410,7 @@ module TabletLayout = {
                 : "text-[hsl(220_20%_60%)] hover:text-[hsl(220_20%_80%)]"
             )}
             onClick={_ => setChatOpen(o => !o)}>
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-              xmlns="http://www.w3.org/2000/svg">
+            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path
                 d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                 strokeLinecap="round"
@@ -482,7 +425,7 @@ module TabletLayout = {
             className={"flex-1 overflow-hidden bg-[hsl(230_25%_6%/0.5)] flex items-center justify-center " ++ (
               chatOpen ? "w-1/2" : "w-full"
             )}>
-            mainPane
+            {active == "editor" ? editorSection : previewSection}
           </div>
           {chatOpen
             ? <div
@@ -490,18 +433,13 @@ module TabletLayout = {
                 <div
                   className="border-b border-[hsl(220_20%_95%/0.08)] px-4 py-2 flex items-center justify-between glass-strong">
                   <span className="text-sm font-medium flex items-center gap-2">
-                    chatIconSmall
+                    {chatIconSmall}
                     {React.string("AI Assistant")}
                   </span>
                   <button
                     className="p-1 hover:bg-[hsl(220_20%_20%)] rounded transition-colors"
                     onClick={_ => setChatOpen(_ => false)}>
-                    <svg
-                      className="w-4 h-4"
-                      fill="none"
-                      stroke="currentColor"
-                      viewBox="0 0 24 24"
-                      xmlns="http://www.w3.org/2000/svg">
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path
                         d="M6 18L18 6M6 6l12 12"
                         strokeLinecap="round"
@@ -511,7 +449,7 @@ module TabletLayout = {
                     </svg>
                   </button>
                 </div>
-                <div className="flex-1 overflow-hidden flex flex-col"> chatSection </div>
+                <div className="flex-1 overflow-hidden flex flex-col"> {chatSection} </div>
               </div>
             : React.null}
         </div>
@@ -521,26 +459,13 @@ module TabletLayout = {
 }
 
 module MobileLayout = {
-  type tab = Editor | Preview | Chat
-
   @react.component
   let make = (
     ~editorSection: React.element,
     ~previewSection: React.element,
     ~chatSection: React.element,
     ~sceneTitle as _: option<string>=?,
-  ) => {
-    let (active, setActive) = React.useState(() => Preview)
-
-    let triggerClass = (tab: tab, activeBg: string, activeFg: string) =>
-      "flex-1 py-2 px-3 text-sm font-medium transition-colors " ++ (
-        active == tab
-          ? "bg-[hsl(" ++ activeBg ++ ")] text-[hsl(" ++ activeFg ++ ")]"
-          : "text-[hsl(220_20%_60%)] hover:text-[hsl(220_20%_80%)]"
-      )
-
-    let panelClass = "flex-1 m-0 overflow-hidden bg-[hsl(230_25%_6%/0.5)]"
-
+  ) =>
     <div
       className="h-screen flex flex-col gradient-mesh relative overflow-hidden playground-mono">
       <div className="absolute inset-0 overflow-hidden pointer-events-none">
@@ -555,34 +480,42 @@ module MobileLayout = {
         />
       </div>
       <NavBar />
-      <div className="flex-1 flex flex-col relative z-0">
-        <div
-          className="w-full flex justify-start border-b border-[hsl(220_20%_95%/0.08)] rounded-none flex-shrink-0 glass-strong">
-          <button
-            className={triggerClass(Editor, "265_90%_65%/0.08", "265_90%_60%/0.8")}
-            onClick={_ => setActive(_ => Editor)}>
+      <Tabs defaultValue="preview" className="flex-1 flex flex-col relative z-0">
+        <Tabs.List
+          className="w-full justify-start border-b border-[hsl(220_20%_95%/0.08)] rounded-none flex-shrink-0 glass-strong">
+          <Tabs.Trigger
+            value="editor"
+            className="flex-1 data-[state=active]:bg-[hsl(265_90%_65%/0.08)] data-[state=active]:text-[hsl(265_90%_60%/0.8)]">
             {React.string("Editor")}
-          </button>
-          <button
-            className={triggerClass(Preview, "200_90%_50%/0.1", "200_90%_60%")}
-            onClick={_ => setActive(_ => Preview)}>
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="preview"
+            className="flex-1 data-[state=active]:bg-[hsl(200_90%_50%/0.1)] data-[state=active]:text-[hsl(200_90%_60%)]">
             {React.string("Preview")}
-          </button>
-          <button
-            className={triggerClass(Chat, "320_90%_60%/0.1", "320_90%_70%")}
-            onClick={_ => setActive(_ => Chat)}>
+          </Tabs.Trigger>
+          <Tabs.Trigger
+            value="chat"
+            className="flex-1 data-[state=active]:bg-[hsl(320_90%_60%/0.1)] data-[state=active]:text-[hsl(320_90%_70%)]">
             {React.string("Chat")}
-          </button>
-        </div>
-        {switch active {
-        | Editor => <div className=panelClass> editorSection </div>
-        | Preview =>
-          <div className={panelClass ++ " flex items-center justify-center"}> previewSection </div>
-        | Chat => <div className={panelClass ++ " flex flex-col"}> chatSection </div>
-        }}
-      </div>
+          </Tabs.Trigger>
+        </Tabs.List>
+        <Tabs.Content
+          value="editor"
+          className="flex-1 m-0 overflow-hidden bg-[hsl(230_25%_6%/0.5)]">
+          {editorSection}
+        </Tabs.Content>
+        <Tabs.Content
+          value="preview"
+          className="flex-1 m-0 overflow-hidden bg-[hsl(230_25%_6%/0.5)] flex items-center justify-center">
+          {previewSection}
+        </Tabs.Content>
+        <Tabs.Content
+          value="chat"
+          className="flex-1 m-0 overflow-hidden bg-[hsl(230_25%_6%/0.5)] flex flex-col">
+          {chatSection}
+        </Tabs.Content>
+      </Tabs>
     </div>
-  }
 }
 
 @react.component
@@ -595,19 +528,7 @@ let make = (
 ) =>
   switch useLayoutMode() {
   | Desktop =>
-    <DesktopLayout
-      editorSection
-      previewSection
-      chatSection
-      ?sceneTitle
-      ?previewViewportInfo
-    />
-  | Tablet =>
-    <TabletLayout
-      editorSection previewSection chatSection ?sceneTitle
-    />
-  | Mobile =>
-    <MobileLayout
-      editorSection previewSection chatSection ?sceneTitle
-    />
+    <DesktopLayout editorSection previewSection chatSection ?sceneTitle ?previewViewportInfo />
+  | Tablet => <TabletLayout editorSection previewSection chatSection ?sceneTitle />
+  | Mobile => <MobileLayout editorSection previewSection chatSection ?sceneTitle />
   }

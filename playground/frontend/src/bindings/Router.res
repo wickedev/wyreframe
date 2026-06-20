@@ -32,6 +32,15 @@ module NavLink = {
 }
 
 @module("react-router-dom") external useNavigate: unit => (string => unit) = "useNavigate"
-@module("react-router-dom") external useLocation: unit => {"pathname": string, "search": string} = "useLocation"
+
+// Same `useNavigate` function, typed to pass router location state as the
+// optional second argument (e.g. `navigate("/playground", {state})`).
+type navigateOptions<'a> = {state: 'a}
+@module("react-router-dom")
+external useNavigateWithState: unit => (string, navigateOptions<'a>) => unit = "useNavigate"
+
+@module("react-router-dom")
+external useLocation: unit => {"pathname": string, "search": string, "state": Nullable.t<'a>} =
+  "useLocation"
 @module("react-router-dom") external useParams: unit => Dict.t<string> = "useParams"
 @module("react-router-dom") external useSearchParams: unit => ('a, 'b) = "useSearchParams"

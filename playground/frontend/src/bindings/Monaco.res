@@ -21,9 +21,9 @@ module Loader = {
 
   // Configure Monaco to load from CDN (mirroring the deployed playground).
   let configureFromCdn = () => {
-    let _ = %raw(`(function() {
-      const loader = require("@monaco-editor/loader").default;
-      loader.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" } });
-    })`)
+    let configure: 'a => unit = %raw(`(l) => {
+      l.config({ paths: { vs: "https://cdn.jsdelivr.net/npm/monaco-editor@0.45.0/min/vs" } });
+    }`)
+    configure(loader)
   }
 }

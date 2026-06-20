@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { BrowserRouter } from "react-router-dom";
+import { TooltipProvider } from "@radix-ui/react-tooltip";
 import { make as App } from "./Index.mjs";
 import "./styles.css";
 
@@ -10,9 +11,12 @@ if (!root) {
 } else {
   createRoot(root).render(
     <StrictMode>
-      <BrowserRouter>
-        <App />
-      </BrowserRouter>
+      {/* App-wide Radix Tooltip provider (deployed used delayDuration 400 / skipDelayDuration 300). */}
+      <TooltipProvider delayDuration={400} skipDelayDuration={300}>
+        <BrowserRouter>
+          <App />
+        </BrowserRouter>
+      </TooltipProvider>
     </StrictMode>,
   );
 }

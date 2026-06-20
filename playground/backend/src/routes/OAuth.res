@@ -245,8 +245,8 @@ let fetchUsageMetricsFn: string => promise<Nullable.t<usageMetrics>> = %raw(`asy
       const diffHours = Math.floor(diffMs / (1e3 * 60 * 60));
       const diffMinutes = Math.floor(diffMs % (1e3 * 60 * 60) / (1e3 * 60));
       if (diffHours < 24 && diffHours >= 0) {
-        if (diffHours === 0) return diffMinutes + "분 후";
-        return diffHours + "시간 " + diffMinutes + "분 후";
+        if (diffHours === 0) return diffMinutes + "m";
+        return diffHours + "h " + diffMinutes + "m";
       }
       return date.toLocaleString("ko-KR", { month: "long", day: "numeric", hour: "numeric", minute: "2-digit", hour12: true });
     };

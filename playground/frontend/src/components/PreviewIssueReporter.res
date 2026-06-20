@@ -456,15 +456,15 @@ let make = (
           {React.string("Creating issue...")}
         </p>
         <ul className="text-xs text-muted-foreground space-y-1">
-          <li> {React.string("\xe2\x80\xa2 Analyzing your report with AI")} </li>
-          <li> {React.string("\xe2\x80\xa2 Creating GitHub issue")} </li>
+          <li> {React.string("• Analyzing your report with AI")} </li>
+          <li> {React.string("• Creating GitHub issue")} </li>
         </ul>
       </div>
     | Error(msg) =>
       <div className="space-y-4">
         <div
           role="alert"
-          className="relative w-full rounded-lg border border-destructive/50 text-destructive dark:border-destructive p-4 [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-destructive [&>svg+div]:translate-y-[-3px] [&:has(svg)]:pl-11">
+          className="relative w-full rounded-lg border px-4 py-3 text-sm [&>svg+div]:translate-y-[-3px] [&>svg]:absolute [&>svg]:left-4 [&>svg]:top-4 [&>svg]:text-foreground [&>svg~*]:pl-7 border-destructive/50 text-destructive dark:border-destructive [&>svg]:text-destructive">
           <Lucide.CircleAlert className="h-4 w-4" />
           <h5 className="mb-1 font-medium leading-none tracking-tight">
             {React.string("Error")}
